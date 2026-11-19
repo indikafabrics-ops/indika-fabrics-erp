@@ -29,6 +29,21 @@ type MenuKey =
   | 'security'
   | 'yearclosing';
 
+const ALL_MENU_KEYS: MenuKey[] = [
+  'dashboard',
+  'grn',
+  'cutting',
+  'production',
+  'storeroom',
+  'readystock',
+  'catalog',
+  'costing',
+  'tailor',
+  'reports',
+  'security',
+  'yearclosing'
+];
+
 const MENU_ITEMS: { key: MenuKey; label: string; title: string; roles: UserRole[] }[] = [
   { key: 'dashboard', label: '🏠 Dashboard Overview', title: 'Pommys Garment ERP — Executive Dashboard', roles: ['ADMIN', 'OFFICE'] },
   { key: 'grn', label: '📥 Purchase & GRN', title: 'Goods Receipt Note (Master GRN)', roles: ['ADMIN', 'OFFICE'] },
@@ -40,8 +55,15 @@ const MENU_ITEMS: { key: MenuKey; label: string; title: string; roles: UserRole[
   { key: 'costing', label: '🧮 Costing & Rate Fixer', title: 'Garment Costing & Wholesale/Retail Rate Fixer', roles: ['ADMIN'] },
   { key: 'tailor', label: '🧵 Tailor Ledger & Jobwork', title: 'Tailor & Stitching Job-Work Ledger', roles: ['ADMIN', 'OFFICE'] },
   { key: 'reports', label: '📊 Master Reports & History', title: 'Godown, Ready Stock & Supplier History Reports', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'security', label: '🔐 Security & Admin', title: 'User Roles, Access Control & User Manager', roles: ['ADMIN'] },
+  { key: 'security', label: '🔐 Security & Admin', title: 'User Roles, Rights & User Manager', roles: ['ADMIN'] },
   { key: 'yearclosing', label: '📁 Year Closing & Backup', title: 'Financial Year Closing & Data Backup Center', roles: ['ADMIN'] }
+];
+
+const LOGIN_TABS: { role: UserRole; label: string; subtitle: string; badgeBg: string; badgeColor: string }[] = [
+  { role: 'ADMIN', label: '🛡️ Admin', subtitle: 'Admin Portal Login', badgeBg: '#fee2e2', badgeColor: '#b91c1c' },
+  { role: 'OFFICE', label: '🏢 Office', subtitle: 'Office Staff Portal Login', badgeBg: '#dbeafe', badgeColor: '#1d4ed8' },
+  { role: 'SALESMAN', label: '👔 Salesman', subtitle: 'Salesman Portal Login', badgeBg: '#fef3c7', badgeColor: '#b45309' },
+  { role: 'CUSTOMER', label: '🛍️ Customer', subtitle: 'Customer Catalog Login', badgeBg: '#dcfce7', badgeColor: '#15803d' }
 ];
 
 function normalizeRole(rawRole: any): UserRole {
@@ -52,45 +74,44 @@ function normalizeRole(rawRole: any): UserRole {
   return 'CUSTOMER';
 }
 
+function getDefaultMenusForRole(role: UserRole): MenuKey[] {
+  return MENU_ITEMS.filter(m => m.roles.includes(role)).map(m => m.key);
+}
+
+function getEffectiveMenus(userObj: any): MenuKey[] {
+  const role = normalizeRole(userObj?.role);
+  if (role === 'ADMIN') return ALL_MENU_KEYS;
+  if (Array.isArray(userObj?.allowed_menus) && userObj.allowed_menus.length > 0) {
+    return userObj.allowed_menus.filter((k: any) => ALL_MENU_KEYS.includes(k));
+  }
+  return getDefaultMenusForRole(role);
+}
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   if (!user) return <LoginScreen onLogin={setUser} />;
   return <Dashboard user={user} onLogout={() => setUser(null)} />;
 }
 
-// 1. Corporate Login + Customer Self-Registration
+// 1. 4 Separate Role Login Options (Admin-Created Accounts Only)
 function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
-  const [isCustomerSignup, setIsCustomerSignup] = useState(false);
-  const [fullName, setFullName] = useState('');
+  const [selectedPortal, setSelectedPortal] = useState<UserRole>('ADMIN');
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const activePortalMeta = LOGIN_TABS.find(t => t.role === selectedPortal) || LOGIN_TABS[0];
+
+  const handlePortalSwitch = (role: UserRole) => {
+    setSelectedPortal(role);
+    setError('');
+  };
+
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
-    if (isCustomerSignup) {
-      if (!fullName.trim() || !mobile.trim() || !password.trim()) {
-        setLoading(false);
-        setError('Please fill Name, Mobile Number and Password.');
-        return;
-      }
-      const { data: created, error: createErr } = await supabase
-        .from('pommys_users')
-        .insert([{ full_name: fullName.trim(), mobile_number: mobile.trim(), password: password.trim(), role: 'CUSTOMER' }])
-        .select()
-        .single();
-      setLoading(false);
-      if (createErr || !created) {
-        setError(createErr?.message || 'Unable to register customer. Mobile number may already exist.');
-      } else {
-        onLogin(created);
-      }
-      return;
-    }
 
     const { data, error: dbError } = await supabase
       .from('pommys_users')
@@ -99,61 +120,101 @@ function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
       .eq('password', password.trim())
       .single();
     setLoading(false);
-    if (dbError || !data) setError('Invalid Credentials!');
-    else onLogin(data);
+
+    if (dbError || !data) {
+      setError('Invalid Credentials!');
+      return;
+    }
+
+    const actualRole = normalizeRole(data.role);
+    if (actualRole !== selectedPortal) {
+      setError(`Access Denied: This account belongs to ${actualRole}. Please use the ${actualRole} login option.`);
+      return;
+    }
+
+    onLogin(data);
   };
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f1f5f9', fontFamily: '"Segoe UI", Tahoma, sans-serif', padding: '16px' }}>
-      <div style={{ background: 'white', padding: '40px 32px', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', width: '100%', maxWidth: '400px', textAlign: 'center' }}>
+      <div style={{ background: 'white', padding: '32px 28px', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', width: '100%', maxWidth: '460px', textAlign: 'center' }}>
         <img
           src={POMMYS_LOGO_URL}
           alt="Pommys Logo"
-          style={{ height: '68px', marginBottom: '14px', objectFit: 'contain' }}
+          style={{ height: '64px', marginBottom: '10px', objectFit: 'contain' }}
           onError={(e) => {
             const img = e.currentTarget;
             img.onerror = null;
             img.src = "https://via.placeholder.com/180x60/dc2626/ffffff?text=POMMYS";
           }}
         />
-        <p style={{ color: '#64748b', margin: '0 0 22px 0', fontSize: '14px', fontWeight: 'bold' }}>
-          {isCustomerSignup ? 'New Customer Registration (Catalog Access)' : 'Corporate ERP & Catalog Portal'}
+        <p style={{ color: '#475569', margin: '0 0 18px 0', fontSize: '14px', fontWeight: 'bold' }}>
+          Select Login Option
         </p>
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
-          {isCustomerSignup && (
-            <input type="text" placeholder="Customer / Shop Name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={styles.input} required />
-          )}
+        {/* 4 Separate Login Options */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '18px' }}>
+          {LOGIN_TABS.map(tab => {
+            const isSelected = selectedPortal === tab.role;
+            return (
+              <button
+                key={tab.role}
+                type="button"
+                onClick={() => handlePortalSwitch(tab.role)}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: isSelected ? '2px solid #0f172a' : '1px solid #cbd5e1',
+                  background: isSelected ? '#0f172a' : '#f8fafc',
+                  color: isSelected ? 'white' : '#1e293b',
+                  fontWeight: 'bold',
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{
+          display: 'inline-block',
+          background: activePortalMeta.badgeBg,
+          color: activePortalMeta.badgeColor,
+          padding: '4px 12px',
+          borderRadius: '20px',
+          fontSize: '12px',
+          fontWeight: 'bold',
+          marginBottom: '16px'
+        }}>
+          {activePortalMeta.subtitle}
+        </div>
+
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <input type="text" placeholder="User ID / Mobile Number" value={mobile} onChange={(e) => setMobile(e.target.value)} style={styles.input} required />
           <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.input} required />
-          {error && <p style={{ color: '#ef4444', fontSize: '13px', margin: 0 }}>{error}</p>}
+          {error && <p style={{ color: '#ef4444', fontSize: '13px', margin: 0, fontWeight: 'bold' }}>{error}</p>}
           <button type="submit" disabled={loading} style={styles.primaryBtn}>
-            {loading ? 'Please wait...' : isCustomerSignup ? 'Register & View Catalog' : 'Secure Login'}
+            {loading ? 'Authenticating...' : `Login as ${selectedPortal}`}
           </button>
         </form>
-
-        <div style={{ marginTop: '18px', borderTop: '1px solid #e2e8f0', paddingTop: '14px' }}>
-          <button
-            type="button"
-            onClick={() => { setIsCustomerSignup(!isCustomerSignup); setError(''); }}
-            style={{ background: 'transparent', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
-          >
-            {isCustomerSignup ? '← Back to Staff / Customer Login' : 'New Customer? Register Free Account →'}
-          </button>
-        </div>
       </div>
     </div>
   );
 }
 
-// 2. Dashboard Layout with Role-Based Menus
+// 2. Dashboard Layout with User-Specific Menu Rights
 function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
   const role = normalizeRole(user?.role);
-  const allowedMenus = MENU_ITEMS.filter(m => m.roles.includes(role));
+  const effectiveMenuKeys = getEffectiveMenus(user);
+  const allowedMenus = MENU_ITEMS.filter(m => effectiveMenuKeys.includes(m.key));
   const defaultMenu: MenuKey = allowedMenus[0]?.key || 'catalog';
 
   const [activeMenu, setActiveMenu] = useState<MenuKey>(defaultMenu);
   const currentMeta = allowedMenus.find(m => m.key === activeMenu) || allowedMenus[0];
+
+  const hasQuickActions = effectiveMenuKeys.includes('grn') || effectiveMenuKeys.includes('cutting') || effectiveMenuKeys.includes('reports');
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', fontFamily: '"Segoe UI", Tahoma, sans-serif' }}>
@@ -194,11 +255,17 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <div style={{ background: 'white', padding: '14px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px' }}>{currentMeta?.title}</h3>
-          {(role === 'ADMIN' || role === 'OFFICE') && (
+          {hasQuickActions && (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button type="button" onClick={() => setActiveMenu('grn')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New GRN</button>
-              <button type="button" onClick={() => setActiveMenu('cutting')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New Cutting</button>
-              <button type="button" onClick={() => setActiveMenu('reports')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>Reports</button>
+              {effectiveMenuKeys.includes('grn') && (
+                <button type="button" onClick={() => setActiveMenu('grn')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New GRN</button>
+              )}
+              {effectiveMenuKeys.includes('cutting') && (
+                <button type="button" onClick={() => setActiveMenu('cutting')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New Cutting</button>
+              )}
+              {effectiveMenuKeys.includes('reports') && (
+                <button type="button" onClick={() => setActiveMenu('reports')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>Reports</button>
+              )}
             </div>
           )}
         </div>
@@ -981,7 +1048,7 @@ function TailorLedgerModule() {
   );
 }
 
-// 11. Security & Admin User Manager (Create + Edit + Delete)
+// 11. Security & Admin User Manager (Create + Edit + Per-User Menu Rights + Delete)
 function SecurityAdminModule({ currentUser }: { currentUser: any }) {
   const [users, setUsers] = useState<any[]>([]);
   const [fullName, setFullName] = useState('');
@@ -996,6 +1063,10 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('OFFICE');
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+  const [rightsUserId, setRightsUserId] = useState<number | null>(null);
+  const [selectedRights, setSelectedRights] = useState<MenuKey[]>([]);
+  const [savingRights, setSavingRights] = useState(false);
 
   const loadUsers = async () => {
     const { data } = await supabase.from('pommys_users').select('*').order('id', { ascending: true });
@@ -1038,11 +1109,13 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
 
     setSaving(true);
     try {
+      const defaultMenus = getDefaultMenusForRole(role);
       const { error } = await supabase.from('pommys_users').insert([{
         full_name: fullName.trim(),
         mobile_number: mobile.trim(),
         password: password.trim(),
-        role
+        role,
+        allowed_menus: defaultMenus
       }]);
       if (error) {
         alert('Error creating user: ' + error.message);
@@ -1058,6 +1131,7 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
   };
 
   const startEdit = (u: any) => {
+    setRightsUserId(null);
     setEditingId(u.id);
     setEditName(u.full_name || '');
     setEditMobile(u.mobile_number || '');
@@ -1101,6 +1175,37 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
     }
   };
 
+  const openRightsEditor = (u: any) => {
+    setEditingId(null);
+    setRightsUserId(u.id);
+    setSelectedRights(getEffectiveMenus(u));
+  };
+
+  const toggleRightMenu = (key: MenuKey) => {
+    setSelectedRights(prev =>
+      prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key]
+    );
+  };
+
+  const handleSaveRights = async (userId: number) => {
+    const finalMenus: MenuKey[] = selectedRights.length > 0 ? selectedRights : ['catalog'];
+    setSavingRights(true);
+    try {
+      const { error } = await supabase
+        .from('pommys_users')
+        .update({ allowed_menus: finalMenus })
+        .eq('id', userId);
+      if (error) {
+        alert('Error saving rights: ' + error.message);
+      } else {
+        setRightsUserId(null);
+        await loadUsers();
+      }
+    } finally {
+      setSavingRights(false);
+    }
+  };
+
   const handleDeleteUser = async (u: any) => {
     if (u.id === currentUser?.id) {
       alert('You cannot delete your currently logged-in Admin account.');
@@ -1111,6 +1216,8 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
     if (error) alert('Error deleting user: ' + error.message);
     else loadUsers();
   };
+
+  const rightsTargetUser = users.find(u => u.id === rightsUserId);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -1149,8 +1256,70 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
         </form>
       </div>
 
+      {rightsTargetUser && (
+        <div style={{ ...styles.card, border: '2px solid #2563eb', background: '#f8fafc' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+            <h4 style={{ margin: 0, color: '#0f172a' }}>
+              🔐 Menu Rights for: <span style={{ color: '#2563eb' }}>{rightsTargetUser.full_name}</span> ({normalizeRole(rightsTargetUser.role)})
+            </h4>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" onClick={() => setSelectedRights([...ALL_MENU_KEYS])} style={{ ...styles.secondaryBtn, padding: '5px 10px', fontSize: '12px' }}>Select All</button>
+              <button type="button" onClick={() => setSelectedRights(getDefaultMenusForRole(normalizeRole(rightsTargetUser.role)))} style={{ ...styles.secondaryBtn, padding: '5px 10px', fontSize: '12px' }}>Role Default</button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+            {MENU_ITEMS.map(m => {
+              const checked = selectedRights.includes(m.key);
+              return (
+                <label
+                  key={m.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'white',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: checked ? '1px solid #2563eb' : '1px solid #cbd5e1',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: checked ? 'bold' : 'normal'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleRightMenu(m.key)}
+                  />
+                  {m.label}
+                </label>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => handleSaveRights(rightsTargetUser.id)}
+              disabled={savingRights}
+              style={styles.successBtn}
+            >
+              {savingRights ? 'Saving Rights...' : '💾 Save User Rights'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRightsUserId(null)}
+              style={styles.secondaryBtn}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={styles.card}>
-        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>👥 Active User Credentials List</h4>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>👥 Active User Credentials & Rights List</h4>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
@@ -1159,13 +1328,15 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
                 <th style={styles.thSub}>Mobile (Username)</th>
                 <th style={styles.thSub}>Password</th>
                 <th style={styles.thSub}>Role</th>
-                <th style={{ ...styles.thSub, textAlign: 'center', width: '170px' }}>Action</th>
+                <th style={styles.thSub}>Allowed Menus</th>
+                <th style={{ ...styles.thSub, textAlign: 'center', width: '230px' }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u, idx) => {
                 const isEditing = editingId === u.id;
                 const r = normalizeRole(u.role);
+                const effMenus = getEffectiveMenus(u);
                 return (
                   <tr key={u.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                     <td style={styles.td}>
@@ -1210,6 +1381,11 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
                         </span>
                       )}
                     </td>
+                    <td style={styles.td}>
+                      <span style={{ fontSize: '12px', color: '#334155', fontWeight: 'bold' }}>
+                        {effMenus.length} / {ALL_MENU_KEYS.length} Menus
+                      </span>
+                    </td>
                     <td style={{ ...styles.td, textAlign: 'center' }}>
                       {isEditing ? (
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
@@ -1230,11 +1406,18 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
                           </button>
                         </div>
                       ) : (
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => openRightsEditor(u)}
+                            style={{ background: '#eef2ff', color: '#4338ca', border: '1px solid #a5b4fc', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                          >
+                            🔐 Rights
+                          </button>
                           <button
                             type="button"
                             onClick={() => startEdit(u)}
-                            style={{ background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                            style={{ background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
                           >
                             ✏️ Edit
                           </button>
@@ -1242,7 +1425,7 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
                             <button
                               type="button"
                               onClick={() => handleDeleteUser(u)}
-                              style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                              style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
                             >
                               Delete
                             </button>
