@@ -13,6 +13,8 @@ const initialSuppliers = [
 
 const POMMYS_LOGO_URL = "https://chaodxrbgiqotdxxvjcj.supabase.co/storage/v1/object/public/assets/Pommys%20Logo%20Jepeg.jpg";
 
+type UserRole = 'ADMIN' | 'OFFICE' | 'SALESMAN' | 'CUSTOMER';
+
 type MenuKey =
   | 'dashboard'
   | 'grn'
@@ -27,20 +29,28 @@ type MenuKey =
   | 'security'
   | 'yearclosing';
 
-const MENU_ITEMS: { key: MenuKey; label: string; title: string }[] = [
-  { key: 'dashboard', label: '🏠 Dashboard Overview', title: 'Pommys Garment ERP — Executive Dashboard' },
-  { key: 'grn', label: '📥 Purchase & GRN', title: 'Goods Receipt Note (Master GRN)' },
-  { key: 'cutting', label: '✂️ Fabric Issue & Cutting', title: 'Fabric Issue & Cutting Module' },
-  { key: 'production', label: '🏭 Production WIP', title: 'Live Production Tracking (WIP)' },
-  { key: 'storeroom', label: '🏪 Store Room & Trims', title: 'Store Room, Accessories & Trims Stock' },
-  { key: 'readystock', label: '👕 Ready Stock Godown', title: 'Finished Ready Stock & Dispatch Register' },
-  { key: 'catalog', label: '📒 Salesman Catalog', title: 'Salesman Design Catalog & Sample Rate Sheet' },
-  { key: 'costing', label: '🧮 Costing & Rate Fixer', title: 'Garment Costing & Wholesale/Retail Rate Fixer' },
-  { key: 'tailor', label: '🧵 Tailor Ledger & Jobwork', title: 'Tailor & Stitching Job-Work Ledger' },
-  { key: 'reports', label: '📊 Master Reports & History', title: 'Godown, Ready Stock & Supplier History Reports' },
-  { key: 'security', label: '🔐 Security & Admin', title: 'User Roles, Access Control & Audit Logs' },
-  { key: 'yearclosing', label: '📁 Year Closing & Backup', title: 'Financial Year Closing & Data Backup Center' }
+const MENU_ITEMS: { key: MenuKey; label: string; title: string; roles: UserRole[] }[] = [
+  { key: 'dashboard', label: '🏠 Dashboard Overview', title: 'Pommys Garment ERP — Executive Dashboard', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'grn', label: '📥 Purchase & GRN', title: 'Goods Receipt Note (Master GRN)', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'cutting', label: '✂️ Fabric Issue & Cutting', title: 'Fabric Issue & Cutting Module', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'production', label: '🏭 Production WIP', title: 'Live Production Tracking (WIP)', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'storeroom', label: '🏪 Store Room & Trims', title: 'Store Room, Accessories & Trims Stock', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'readystock', label: '👕 Ready Stock Godown', title: 'Finished Ready Stock & Dispatch Register', roles: ['ADMIN', 'OFFICE', 'SALESMAN'] },
+  { key: 'catalog', label: '📒 Salesman & Customer Catalog', title: 'Design Catalog & Sample Sheet', roles: ['ADMIN', 'OFFICE', 'SALESMAN', 'CUSTOMER'] },
+  { key: 'costing', label: '🧮 Costing & Rate Fixer', title: 'Garment Costing & Wholesale/Retail Rate Fixer', roles: ['ADMIN'] },
+  { key: 'tailor', label: '🧵 Tailor Ledger & Jobwork', title: 'Tailor & Stitching Job-Work Ledger', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'reports', label: '📊 Master Reports & History', title: 'Godown, Ready Stock & Supplier History Reports', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'security', label: '🔐 Security & Admin', title: 'User Roles, Access Control & User Manager', roles: ['ADMIN'] },
+  { key: 'yearclosing', label: '📁 Year Closing & Backup', title: 'Financial Year Closing & Data Backup Center', roles: ['ADMIN'] }
 ];
+
+function normalizeRole(rawRole: any): UserRole {
+  const upper = String(rawRole || 'CUSTOMER').toUpperCase();
+  if (upper === 'ADMIN') return 'ADMIN';
+  if (upper === 'OFFICE') return 'OFFICE';
+  if (upper === 'SALESMAN') return 'SALESMAN';
+  return 'CUSTOMER';
+}
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -48,22 +58,47 @@ export default function App() {
   return <Dashboard user={user} onLogout={() => setUser(null)} />;
 }
 
-// 1. Corporate Login
+// 1. Corporate Login + Customer Self-Registration
 function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
+  const [isCustomerSignup, setIsCustomerSignup] = useState(false);
+  const [fullName, setFullName] = useState('');
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setInfo('');
+
+    if (isCustomerSignup) {
+      if (!fullName.trim() || !mobile.trim() || !password.trim()) {
+        setLoading(false);
+        setError('Please fill Name, Mobile Number and Password.');
+        return;
+      }
+      const { data: created, error: createErr } = await supabase
+        .from('pommys_users')
+        .insert([{ full_name: fullName.trim(), mobile_number: mobile.trim(), password: password.trim(), role: 'CUSTOMER' }])
+        .select()
+        .single();
+      setLoading(false);
+      if (createErr || !created) {
+        setError(createErr?.message || 'Unable to register customer. Mobile number may already exist.');
+      } else {
+        onLogin(created);
+      }
+      return;
+    }
+
     const { data, error: dbError } = await supabase
       .from('pommys_users')
       .select('*')
-      .eq('mobile_number', mobile)
-      .eq('password', password)
+      .eq('mobile_number', mobile.trim())
+      .eq('password', password.trim())
       .single();
     setLoading(false);
     if (dbError || !data) setError('Invalid Credentials!');
@@ -72,33 +107,56 @@ function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f1f5f9', fontFamily: '"Segoe UI", Tahoma, sans-serif', padding: '16px' }}>
-      <div style={{ background: 'white', padding: '45px 35px', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', width: '100%', maxWidth: '390px', textAlign: 'center' }}>
+      <div style={{ background: 'white', padding: '40px 32px', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', width: '100%', maxWidth: '400px', textAlign: 'center' }}>
         <img
           src={POMMYS_LOGO_URL}
           alt="Pommys Logo"
-          style={{ height: '70px', marginBottom: '16px', objectFit: 'contain' }}
+          style={{ height: '68px', marginBottom: '14px', objectFit: 'contain' }}
           onError={(e) => {
             const img = e.currentTarget;
             img.onerror = null;
             img.src = "https://via.placeholder.com/180x60/dc2626/ffffff?text=POMMYS";
           }}
         />
-        <p style={{ color: '#64748b', margin: '0 0 26px 0', fontSize: '14px', fontWeight: 'bold' }}>Corporate ERP Portal</p>
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <input type="text" placeholder="User ID / Mobile" value={mobile} onChange={(e) => setMobile(e.target.value)} style={styles.input} required />
+        <p style={{ color: '#64748b', margin: '0 0 22px 0', fontSize: '14px', fontWeight: 'bold' }}>
+          {isCustomerSignup ? 'New Customer Registration (Catalog Access)' : 'Corporate ERP & Catalog Portal'}
+        </p>
+
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
+          {isCustomerSignup && (
+            <input type="text" placeholder="Customer / Shop Name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={styles.input} required />
+          )}
+          <input type="text" placeholder="User ID / Mobile Number" value={mobile} onChange={(e) => setMobile(e.target.value)} style={styles.input} required />
           <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.input} required />
           {error && <p style={{ color: '#ef4444', fontSize: '13px', margin: 0 }}>{error}</p>}
-          <button type="submit" disabled={loading} style={styles.primaryBtn}>{loading ? 'Authenticating...' : 'Secure Login'}</button>
+          {info && <p style={{ color: '#059669', fontSize: '13px', margin: 0 }}>{info}</p>}
+          <button type="submit" disabled={loading} style={styles.primaryBtn}>
+            {loading ? 'Please wait...' : isCustomerSignup ? 'Register & View Catalog' : 'Secure Login'}
+          </button>
         </form>
+
+        <div style={{ marginTop: '18px', borderTop: '1px solid #e2e8f0', paddingTop: '14px' }}>
+          <button
+            type="button"
+            onClick={() => { setIsCustomerSignup(!isCustomerSignup); setError(''); }}
+            style={{ background: 'transparent', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+          >
+            {isCustomerSignup ? '← Back to Staff / Customer Login' : 'New Customer? Register Free Account →'}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// 2. Dashboard Layout with All Modules
+// 2. Dashboard Layout with Role-Based Menus
 function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
-  const [activeMenu, setActiveMenu] = useState<MenuKey>('dashboard');
-  const currentMeta = MENU_ITEMS.find(m => m.key === activeMenu) || MENU_ITEMS[0];
+  const role = normalizeRole(user?.role);
+  const allowedMenus = MENU_ITEMS.filter(m => m.roles.includes(role));
+  const defaultMenu: MenuKey = allowedMenus[0]?.key || 'catalog';
+
+  const [activeMenu, setActiveMenu] = useState<MenuKey>(defaultMenu);
+  const currentMeta = allowedMenus.find(m => m.key === activeMenu) || allowedMenus[0];
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', fontFamily: '"Segoe UI", Tahoma, sans-serif' }}>
@@ -115,12 +173,12 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
             }}
           />
           <div style={{ fontSize: '12px', color: '#475569', marginTop: '6px', fontWeight: 'bold' }}>
-            {user?.full_name || 'Raja Admin'} ({user?.role || 'ADMIN'})
+            {user?.full_name || 'User'} ({role})
           </div>
         </div>
 
         <div style={{ flex: 1, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
-          {MENU_ITEMS.map(item => (
+          {allowedMenus.map(item => (
             <div
               key={item.key}
               style={styles.menuItem(activeMenu === item.key)}
@@ -138,26 +196,28 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <div style={{ background: 'white', padding: '14px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px' }}>{currentMeta.title}</h3>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button type="button" onClick={() => setActiveMenu('grn')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New GRN</button>
-            <button type="button" onClick={() => setActiveMenu('cutting')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New Cutting</button>
-            <button type="button" onClick={() => setActiveMenu('reports')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>Reports</button>
-          </div>
+          <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px' }}>{currentMeta?.title}</h3>
+          {(role === 'ADMIN' || role === 'OFFICE') && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => setActiveMenu('grn')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New GRN</button>
+              <button type="button" onClick={() => setActiveMenu('cutting')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New Cutting</button>
+              <button type="button" onClick={() => setActiveMenu('reports')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>Reports</button>
+            </div>
+          )}
         </div>
 
         <div style={{ flex: 1, padding: '22px', overflowY: 'auto' }}>
-          {activeMenu === 'dashboard' && <DashboardHome onNavigate={setActiveMenu} />}
+          {activeMenu === 'dashboard' && <DashboardHome onNavigate={setActiveMenu} allowedMenus={allowedMenus} />}
           {activeMenu === 'grn' && <GRNEntryForm />}
           {activeMenu === 'cutting' && <CuttingEntryModule />}
           {activeMenu === 'production' && <ProductionTracking />}
           {activeMenu === 'storeroom' && <StoreRoomModule />}
-          {activeMenu === 'readystock' && <ReadyStockModule />}
-          {activeMenu === 'catalog' && <SalesmanCatalogModule />}
+          {activeMenu === 'readystock' && <ReadyStockModule canDelete={role === 'ADMIN'} />}
+          {activeMenu === 'catalog' && <SalesmanCatalogModule hideCostRate={role === 'CUSTOMER'} />}
           {activeMenu === 'costing' && <CostingRateFixerModule />}
           {activeMenu === 'tailor' && <TailorLedgerModule />}
           {activeMenu === 'reports' && <ReportsModule />}
-          {activeMenu === 'security' && <SecurityAdminModule user={user} />}
+          {activeMenu === 'security' && <SecurityAdminModule currentUser={user} />}
           {activeMenu === 'yearclosing' && <YearClosingBackupModule />}
         </div>
       </div>
@@ -166,7 +226,7 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
 }
 
 // 0. Executive Dashboard Overview
-function DashboardHome({ onNavigate }: { onNavigate: (menu: MenuKey) => void }) {
+function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKey) => void; allowedMenus: typeof MENU_ITEMS }) {
   const [stats, setStats] = useState({
     fabricMeters: 0,
     wipCount: 0,
@@ -218,9 +278,9 @@ function DashboardHome({ onNavigate }: { onNavigate: (menu: MenuKey) => void }) 
       </div>
 
       <div style={styles.card}>
-        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>Quick Navigation — All ERP Modules</h4>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>Quick Navigation</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
-          {MENU_ITEMS.filter(m => m.key !== 'dashboard').map(item => (
+          {allowedMenus.filter(m => m.key !== 'dashboard').map(item => (
             <button
               key={item.key}
               type="button"
@@ -730,8 +790,8 @@ function StoreRoomModule() {
   );
 }
 
-// 7. Ready Stock Godown Module (With Delete Button)
-function ReadyStockModule() {
+// 7. Ready Stock Godown Module (With Delete Button for Admin)
+function ReadyStockModule({ canDelete }: { canDelete: boolean }) {
   const [readyList, setReadyList] = useState<any[]>([]);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
@@ -771,36 +831,38 @@ function ReadyStockModule() {
               <th style={styles.thSub}>Batch Code</th>
               <th style={styles.thSub}>Model</th>
               <th style={styles.thSub}>Ready Pieces</th>
-              <th style={{ ...styles.thSub, width: '120px', textAlign: 'center' }}>Action</th>
+              {canDelete && <th style={{ ...styles.thSub, width: '120px', textAlign: 'center' }}>Action</th>}
             </tr>
           </thead>
           <tbody>
             {readyList.length === 0 ? (
-              <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No Ready Stock records found yet.</td></tr>
+              <tr><td colSpan={canDelete ? 4 : 3} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No Ready Stock records found yet.</td></tr>
             ) : readyList.map((r, idx) => (
               <tr key={r.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                 <td style={styles.td}><strong>{r.batch_code}</strong></td>
                 <td style={styles.td}>{r.model_name}</td>
                 <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}</td>
-                <td style={{ ...styles.td, textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteReady(r)}
-                    disabled={deletingId === r.id}
-                    style={{
-                      background: '#fee2e2',
-                      color: '#dc2626',
-                      border: '1px solid #fca5a5',
-                      padding: '5px 12px',
-                      borderRadius: '6px',
-                      cursor: deletingId === r.id ? 'not-allowed' : 'pointer',
-                      fontWeight: 'bold',
-                      fontSize: '12px'
-                    }}
-                  >
-                    {deletingId === r.id ? 'Deleting...' : '🗑️ Delete'}
-                  </button>
-                </td>
+                {canDelete && (
+                  <td style={{ ...styles.td, textAlign: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteReady(r)}
+                      disabled={deletingId === r.id}
+                      style={{
+                        background: '#fee2e2',
+                        color: '#dc2626',
+                        border: '1px solid #fca5a5',
+                        padding: '5px 12px',
+                        borderRadius: '6px',
+                        cursor: deletingId === r.id ? 'not-allowed' : 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '12px'
+                      }}
+                    >
+                      {deletingId === r.id ? 'Deleting...' : '🗑️ Delete'}
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -810,8 +872,8 @@ function ReadyStockModule() {
   );
 }
 
-// 8. Salesman Catalog Module
-function SalesmanCatalogModule() {
+// 8. Salesman & Customer Catalog Module
+function SalesmanCatalogModule({ hideCostRate }: { hideCostRate: boolean }) {
   const [designs, setDesigns] = useState<any[]>([]);
   useEffect(() => {
     const loadDesigns = async () => {
@@ -823,7 +885,7 @@ function SalesmanCatalogModule() {
 
   return (
     <div style={styles.card}>
-      <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>📒 Salesman Design Catalog</h4>
+      <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>📒 Pommys Design Catalog</h4>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
         {designs.length === 0 ? (
           <p style={{ color: '#64748b' }}>No catalog designs available yet.</p>
@@ -836,7 +898,9 @@ function SalesmanCatalogModule() {
             )}
             <div style={{ fontWeight: 'bold', color: '#0f172a' }}>Design: {d.design_no || '-'}</div>
             <div style={{ fontSize: '12px', color: '#475569' }}>Item: {d.item_name || '-'} | Color: {d.color || '-'}</div>
-            <div style={{ fontSize: '13px', color: '#059669', fontWeight: 'bold', marginTop: '6px' }}>Base Rate: ₹{d.rate_per_meter || 0}</div>
+            {!hideCostRate && (
+              <div style={{ fontSize: '13px', color: '#059669', fontWeight: 'bold', marginTop: '6px' }}>Base Rate: ₹{d.rate_per_meter || 0}</div>
+            )}
           </div>
         ))}
       </div>
@@ -920,17 +984,167 @@ function TailorLedgerModule() {
   );
 }
 
-// 11. Security & Admin Module
-function SecurityAdminModule({ user }: { user: any }) {
+// 11. Security & Admin User Manager (1 Admin, 5 Office, 5 Salesman, Unlimited Customers)
+function SecurityAdminModule({ currentUser }: { currentUser: any }) {
+  const [users, setUsers] = useState<any[]>([]);
+  const [fullName, setFullName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState<UserRole>('OFFICE');
+  const [saving, setSaving] = useState(false);
+
+  const loadUsers = async () => {
+    const { data } = await supabase.from('pommys_users').select('*').order('id', { ascending: true });
+    if (data) setUsers(data);
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const adminCount = users.filter(u => normalizeRole(u.role) === 'ADMIN').length;
+  const officeCount = users.filter(u => normalizeRole(u.role) === 'OFFICE').length;
+  const salesmanCount = users.filter(u => normalizeRole(u.role) === 'SALESMAN').length;
+  const customerCount = users.filter(u => normalizeRole(u.role) === 'CUSTOMER').length;
+
+  const handleAddUser = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!fullName.trim() || !mobile.trim() || !password.trim()) {
+      alert('Please enter Name, Mobile Number and Password.');
+      return;
+    }
+
+    if (role === 'ADMIN' && adminCount >= 1) {
+      alert('Limit reached: Only 1 Admin account is allowed.');
+      return;
+    }
+    if (role === 'OFFICE' && officeCount >= 5) {
+      alert('Limit reached: Maximum 5 Office Staff accounts allowed.');
+      return;
+    }
+    if (role === 'SALESMAN' && salesmanCount >= 5) {
+      alert('Limit reached: Maximum 5 Salesman accounts allowed.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('pommys_users').insert([{
+        full_name: fullName.trim(),
+        mobile_number: mobile.trim(),
+        password: password.trim(),
+        role
+      }]);
+      if (error) {
+        alert('Error creating user: ' + error.message);
+      } else {
+        setFullName('');
+        setMobile('');
+        setPassword('');
+        await loadUsers();
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (u: any) => {
+    if (u.id === currentUser?.id) {
+      alert('You cannot delete your currently logged-in Admin account.');
+      return;
+    }
+    if (!window.confirm(`Delete user "${u.full_name}" (${u.mobile_number})?`)) return;
+    const { error } = await supabase.from('pommys_users').delete().eq('id', u.id);
+    if (error) alert('Error deleting user: ' + error.message);
+    else loadUsers();
+  };
+
   return (
-    <div style={styles.card}>
-      <h4 style={{ margin: '0 0 12px 0', color: '#0f172a' }}>🔐 Security & Admin Controls</h4>
-      <p style={{ color: '#475569', fontSize: '14px' }}>
-        Logged in as: <strong>{user?.full_name || 'Raja Admin'}</strong> | Role: <strong>{user?.role || 'ADMIN'}</strong>
-      </p>
-      <p style={{ color: '#64748b', fontSize: '13px' }}>
-        Database & Storage are connected to Supabase (`chaodxrbgiqotdxxvjcj.supabase.co`). Manage user accounts in the <code>pommys_users</code> table.
-      </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+        <div style={{ ...styles.card, borderTop: '4px solid #dc2626' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>ADMIN QUOTA</div>
+          <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', marginTop: '4px' }}>{adminCount} / 1</div>
+        </div>
+        <div style={{ ...styles.card, borderTop: '4px solid #2563eb' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>OFFICE STAFF QUOTA</div>
+          <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', marginTop: '4px' }}>{officeCount} / 5</div>
+        </div>
+        <div style={{ ...styles.card, borderTop: '4px solid #d97706' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>SALESMAN QUOTA</div>
+          <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', marginTop: '4px' }}>{salesmanCount} / 5</div>
+        </div>
+        <div style={{ ...styles.card, borderTop: '4px solid #059669' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>CUSTOMERS (UNLIMITED)</div>
+          <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#059669', marginTop: '4px' }}>{customerCount} / ∞</div>
+        </div>
+      </div>
+
+      <div style={styles.card}>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>➕ Create New User Login (Office / Salesman / Customer)</h4>
+        <form onSubmit={handleAddUser} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <input type="text" placeholder="Full Name / Shop Name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={{ ...styles.input, maxWidth: '210px' }} required />
+          <input type="text" placeholder="Mobile Number (Username)" value={mobile} onChange={(e) => setMobile(e.target.value)} style={{ ...styles.input, maxWidth: '190px' }} required />
+          <input type="text" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...styles.input, maxWidth: '160px' }} required />
+          <select value={role} onChange={(e) => setRole(e.target.value as UserRole)} style={{ ...styles.input, maxWidth: '170px' }}>
+            <option value="OFFICE">OFFICE (Max 5)</option>
+            <option value="SALESMAN">SALESMAN (Max 5)</option>
+            <option value="CUSTOMER">CUSTOMER (Unlimited)</option>
+            <option value="ADMIN">ADMIN (Max 1)</option>
+          </select>
+          <button type="submit" disabled={saving} style={styles.primaryBtn}>{saving ? 'Saving...' : '+ Add User'}</button>
+        </form>
+      </div>
+
+      <div style={styles.card}>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>👥 Active User Credentials List</h4>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ background: '#0f172a', color: 'white' }}>
+                <th style={styles.thSub}>Name</th>
+                <th style={styles.thSub}>Mobile (Username)</th>
+                <th style={styles.thSub}>Password</th>
+                <th style={styles.thSub}>Role</th>
+                <th style={{ ...styles.thSub, textAlign: 'center' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u, idx) => {
+                const r = normalizeRole(u.role);
+                return (
+                  <tr key={u.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={styles.td}><strong>{u.full_name}</strong></td>
+                    <td style={styles.td}>{u.mobile_number}</td>
+                    <td style={styles.td}><code>{u.password}</code></td>
+                    <td style={styles.td}>
+                      <span style={{
+                        padding: '3px 10px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        background: r === 'ADMIN' ? '#fee2e2' : r === 'OFFICE' ? '#dbeafe' : r === 'SALESMAN' ? '#fef3c7' : '#dcfce7',
+                        color: r === 'ADMIN' ? '#b91c1c' : r === 'OFFICE' ? '#1d4ed8' : r === 'SALESMAN' ? '#b45309' : '#15803d'
+                      }}>
+                        {r}
+                      </span>
+                    </td>
+                    <td style={{ ...styles.td, textAlign: 'center' }}>
+                      {u.id !== currentUser?.id ? (
+                        <button type="button" onClick={() => handleDeleteUser(u)} style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
+                          Delete
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>Current Admin</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
