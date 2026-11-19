@@ -730,36 +730,82 @@ function StoreRoomModule() {
   );
 }
 
-// 7. Ready Stock Godown Module
+// 7. Ready Stock Godown Module (With Delete Button)
 function ReadyStockModule() {
   const [readyList, setReadyList] = useState<any[]>([]);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const loadReady = async () => {
+    const { data } = await supabase.from('pommys_ready_stock').select('*').order('id', { ascending: false });
+    if (data) setReadyList(data);
+  };
+
   useEffect(() => {
-    const loadReady = async () => {
-      const { data } = await supabase.from('pommys_ready_stock').select('*').order('id', { ascending: false });
-      if (data) setReadyList(data);
-    };
     loadReady();
   }, []);
+
+  const handleDeleteReady = async (row: any) => {
+    const confirmed = window.confirm(`Are you sure you want to delete batch "${row.batch_code}" (${row.ready_pieces} pcs)?`);
+    if (!confirmed) return;
+
+    setDeletingId(row.id);
+    try {
+      const { error } = await supabase.from('pommys_ready_stock').delete().eq('id', row.id);
+      if (error) {
+        alert('Error deleting record: ' + error.message);
+      } else {
+        setReadyList(prev => prev.filter(item => item.id !== row.id));
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div style={styles.card}>
       <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>👕 Finished Ready Stock Godown</h4>
-      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-        <thead><tr style={{ background: '#0f172a', color: 'white' }}>
-          <th style={styles.thSub}>Batch Code</th><th style={styles.thSub}>Model</th><th style={styles.thSub}>Ready Pieces</th>
-        </tr></thead>
-        <tbody>
-          {readyList.length === 0 ? (
-            <tr><td colSpan={3} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No Ready Stock records found yet.</td></tr>
-          ) : readyList.map((r, idx) => (
-            <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <td style={styles.td}><strong>{r.batch_code}</strong></td>
-              <td style={styles.td}>{r.model_name}</td>
-              <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}</td>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead>
+            <tr style={{ background: '#0f172a', color: 'white' }}>
+              <th style={styles.thSub}>Batch Code</th>
+              <th style={styles.thSub}>Model</th>
+              <th style={styles.thSub}>Ready Pieces</th>
+              <th style={{ ...styles.thSub, width: '120px', textAlign: 'center' }}>Action</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {readyList.length === 0 ? (
+              <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No Ready Stock records found yet.</td></tr>
+            ) : readyList.map((r, idx) => (
+              <tr key={r.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                <td style={styles.td}><strong>{r.batch_code}</strong></td>
+                <td style={styles.td}>{r.model_name}</td>
+                <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}</td>
+                <td style={{ ...styles.td, textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteReady(r)}
+                    disabled={deletingId === r.id}
+                    style={{
+                      background: '#fee2e2',
+                      color: '#dc2626',
+                      border: '1px solid #fca5a5',
+                      padding: '5px 12px',
+                      borderRadius: '6px',
+                      cursor: deletingId === r.id ? 'not-allowed' : 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '12px'
+                    }}
+                  >
+                    {deletingId === r.id ? 'Deleting...' : '🗑️ Delete'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
