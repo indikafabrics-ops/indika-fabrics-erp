@@ -65,14 +65,12 @@ function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setInfo('');
 
     if (isCustomerSignup) {
       if (!fullName.trim() || !mobile.trim() || !password.trim()) {
@@ -129,7 +127,6 @@ function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
           <input type="text" placeholder="User ID / Mobile Number" value={mobile} onChange={(e) => setMobile(e.target.value)} style={styles.input} required />
           <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.input} required />
           {error && <p style={{ color: '#ef4444', fontSize: '13px', margin: 0 }}>{error}</p>}
-          {info && <p style={{ color: '#059669', fontSize: '13px', margin: 0 }}>{info}</p>}
           <button type="submit" disabled={loading} style={styles.primaryBtn}>
             {loading ? 'Please wait...' : isCustomerSignup ? 'Register & View Catalog' : 'Secure Login'}
           </button>
@@ -984,7 +981,7 @@ function TailorLedgerModule() {
   );
 }
 
-// 11. Security & Admin User Manager (1 Admin, 5 Office, 5 Salesman, Unlimited Customers)
+// 11. Security & Admin User Manager (Create + Edit + Delete)
 function SecurityAdminModule({ currentUser }: { currentUser: any }) {
   const [users, setUsers] = useState<any[]>([]);
   const [fullName, setFullName] = useState('');
@@ -992,6 +989,13 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('OFFICE');
   const [saving, setSaving] = useState(false);
+
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editMobile, setEditMobile] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editRole, setEditRole] = useState<UserRole>('OFFICE');
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   const loadUsers = async () => {
     const { data } = await supabase.from('pommys_users').select('*').order('id', { ascending: true });
@@ -1007,25 +1011,30 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
   const salesmanCount = users.filter(u => normalizeRole(u.role) === 'SALESMAN').length;
   const customerCount = users.filter(u => normalizeRole(u.role) === 'CUSTOMER').length;
 
+  const checkQuota = (targetRole: UserRole, excludeUserId?: number) => {
+    const others = users.filter(u => u.id !== excludeUserId);
+    if (targetRole === 'ADMIN' && others.filter(u => normalizeRole(u.role) === 'ADMIN').length >= 1) {
+      alert('Limit reached: Only 1 Admin account is allowed.');
+      return false;
+    }
+    if (targetRole === 'OFFICE' && others.filter(u => normalizeRole(u.role) === 'OFFICE').length >= 5) {
+      alert('Limit reached: Maximum 5 Office Staff accounts allowed.');
+      return false;
+    }
+    if (targetRole === 'SALESMAN' && others.filter(u => normalizeRole(u.role) === 'SALESMAN').length >= 5) {
+      alert('Limit reached: Maximum 5 Salesman accounts allowed.');
+      return false;
+    }
+    return true;
+  };
+
   const handleAddUser = async (e: FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !mobile.trim() || !password.trim()) {
       alert('Please enter Name, Mobile Number and Password.');
       return;
     }
-
-    if (role === 'ADMIN' && adminCount >= 1) {
-      alert('Limit reached: Only 1 Admin account is allowed.');
-      return;
-    }
-    if (role === 'OFFICE' && officeCount >= 5) {
-      alert('Limit reached: Maximum 5 Office Staff accounts allowed.');
-      return;
-    }
-    if (role === 'SALESMAN' && salesmanCount >= 5) {
-      alert('Limit reached: Maximum 5 Salesman accounts allowed.');
-      return;
-    }
+    if (!checkQuota(role)) return;
 
     setSaving(true);
     try {
@@ -1045,6 +1054,50 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const startEdit = (u: any) => {
+    setEditingId(u.id);
+    setEditName(u.full_name || '');
+    setEditMobile(u.mobile_number || '');
+    setEditPassword(u.password || '');
+    setEditRole(normalizeRole(u.role));
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName('');
+    setEditMobile('');
+    setEditPassword('');
+  };
+
+  const handleSaveEdit = async (userId: number) => {
+    if (!editName.trim() || !editMobile.trim() || !editPassword.trim()) {
+      alert('Name, Mobile Number and Password are required.');
+      return;
+    }
+    if (!checkQuota(editRole, userId)) return;
+
+    setUpdatingId(userId);
+    try {
+      const { error } = await supabase
+        .from('pommys_users')
+        .update({
+          full_name: editName.trim(),
+          mobile_number: editMobile.trim(),
+          password: editPassword.trim(),
+          role: editRole
+        })
+        .eq('id', userId);
+      if (error) {
+        alert('Error updating user: ' + error.message);
+      } else {
+        setEditingId(null);
+        await loadUsers();
+      }
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -1106,36 +1159,95 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
                 <th style={styles.thSub}>Mobile (Username)</th>
                 <th style={styles.thSub}>Password</th>
                 <th style={styles.thSub}>Role</th>
-                <th style={{ ...styles.thSub, textAlign: 'center' }}>Action</th>
+                <th style={{ ...styles.thSub, textAlign: 'center', width: '170px' }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u, idx) => {
+                const isEditing = editingId === u.id;
                 const r = normalizeRole(u.role);
                 return (
                   <tr key={u.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={styles.td}><strong>{u.full_name}</strong></td>
-                    <td style={styles.td}>{u.mobile_number}</td>
-                    <td style={styles.td}><code>{u.password}</code></td>
                     <td style={styles.td}>
-                      <span style={{
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        background: r === 'ADMIN' ? '#fee2e2' : r === 'OFFICE' ? '#dbeafe' : r === 'SALESMAN' ? '#fef3c7' : '#dcfce7',
-                        color: r === 'ADMIN' ? '#b91c1c' : r === 'OFFICE' ? '#1d4ed8' : r === 'SALESMAN' ? '#b45309' : '#15803d'
-                      }}>
-                        {r}
-                      </span>
+                      {isEditing ? (
+                        <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} style={styles.tblInput} />
+                      ) : (
+                        <strong>{u.full_name}</strong>
+                      )}
+                    </td>
+                    <td style={styles.td}>
+                      {isEditing ? (
+                        <input type="text" value={editMobile} onChange={(e) => setEditMobile(e.target.value)} style={styles.tblInput} />
+                      ) : (
+                        u.mobile_number
+                      )}
+                    </td>
+                    <td style={styles.td}>
+                      {isEditing ? (
+                        <input type="text" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} style={styles.tblInput} />
+                      ) : (
+                        <code>{u.password}</code>
+                      )}
+                    </td>
+                    <td style={styles.td}>
+                      {isEditing ? (
+                        <select value={editRole} onChange={(e) => setEditRole(e.target.value as UserRole)} style={styles.tblInput}>
+                          <option value="ADMIN">ADMIN</option>
+                          <option value="OFFICE">OFFICE</option>
+                          <option value="SALESMAN">SALESMAN</option>
+                          <option value="CUSTOMER">CUSTOMER</option>
+                        </select>
+                      ) : (
+                        <span style={{
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          background: r === 'ADMIN' ? '#fee2e2' : r === 'OFFICE' ? '#dbeafe' : r === 'SALESMAN' ? '#fef3c7' : '#dcfce7',
+                          color: r === 'ADMIN' ? '#b91c1c' : r === 'OFFICE' ? '#1d4ed8' : r === 'SALESMAN' ? '#b45309' : '#15803d'
+                        }}>
+                          {r}
+                        </span>
+                      )}
                     </td>
                     <td style={{ ...styles.td, textAlign: 'center' }}>
-                      {u.id !== currentUser?.id ? (
-                        <button type="button" onClick={() => handleDeleteUser(u)} style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
-                          Delete
-                        </button>
+                      {isEditing ? (
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEdit(u.id)}
+                            disabled={updatingId === u.id}
+                            style={{ background: '#059669', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            {updatingId === u.id ? '...' : 'Save'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            style={{ background: '#e2e8f0', color: '#334155', border: 'none', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       ) : (
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>Current Admin</span>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(u)}
+                            style={{ background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                          >
+                            ✏️ Edit
+                          </button>
+                          {u.id !== currentUser?.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(u)}
+                              style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
