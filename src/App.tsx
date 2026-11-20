@@ -87,6 +87,20 @@ function getEffectiveMenus(userObj: any): MenuKey[] {
   return getDefaultMenusForRole(role);
 }
 
+function useIsMobileOrTablet() {
+  const [isCompact, setIsCompact] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 1024 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsCompact(window.innerWidth < 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return isCompact;
+}
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   if (!user) return <LoginScreen onLogin={setUser} />;
@@ -136,8 +150,17 @@ function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f1f5f9', fontFamily: '"Segoe UI", Tahoma, sans-serif', padding: '16px' }}>
-      <div style={{ background: 'white', padding: '32px 28px', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', width: '100%', maxWidth: '460px', textAlign: 'center' }}>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      background: '#f1f5f9',
+      fontFamily: '"Segoe UI", Tahoma, sans-serif',
+      padding: 'max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)) 16px',
+      boxSizing: 'border-box'
+    }}>
+      <div style={{ background: 'white', padding: '28px 22px', borderRadius: '14px', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', width: '100%', maxWidth: '460px', textAlign: 'center', boxSizing: 'border-box' }}>
         <img
           src={POMMYS_LOGO_URL}
           alt="Pommys Logo"
@@ -162,7 +185,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
                 type="button"
                 onClick={() => handlePortalSwitch(tab.role)}
                 style={{
-                  padding: '10px 12px',
+                  padding: '11px 10px',
                   borderRadius: '8px',
                   border: isSelected ? '2px solid #0f172a' : '1px solid #cbd5e1',
                   background: isSelected ? '#0f172a' : '#f8fafc',
@@ -204,8 +227,11 @@ function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
   );
 }
 
-// 2. Dashboard Layout with User-Specific Menu Rights
+// 2. Responsive Dashboard Layout (Mobile Drawer + Desktop Fixed Sidebar)
 function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
+  const isCompact = useIsMobileOrTablet();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const role = normalizeRole(user?.role);
   const effectiveMenuKeys = getEffectiveMenus(user);
   const allowedMenus = MENU_ITEMS.filter(m => effectiveMenuKeys.includes(m.key));
@@ -216,14 +242,78 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
 
   const hasQuickActions = effectiveMenuKeys.includes('grn') || effectiveMenuKeys.includes('cutting') || effectiveMenuKeys.includes('reports');
 
+  const handleSelectMenu = (key: MenuKey) => {
+    setActiveMenu(key);
+    if (isCompact) setSidebarOpen(false);
+  };
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', fontFamily: '"Segoe UI", Tahoma, sans-serif' }}>
-      <div style={{ width: '265px', background: '#0f172a', color: 'white', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ padding: '18px', borderBottom: '1px solid #1e293b', textAlign: 'center', background: 'white' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100%', maxWidth: '100vw', overflowX: 'hidden', background: '#f8fafc', fontFamily: '"Segoe UI", Tahoma, sans-serif' }}>
+      {/* Mobile/Tablet Backdrop Overlay */}
+      {isCompact && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.55)',
+            zIndex: 998
+          }}
+        />
+      )}
+
+      {/* Sidebar (Slide-out Drawer on Mobile/Tablet, Fixed on Desktop) */}
+      <div
+        style={{
+          width: '265px',
+          maxWidth: '82vw',
+          background: '#0f172a',
+          color: 'white',
+          display: 'flex',
+          flexDirection: 'column',
+          flexShrink: 0,
+          ...(isCompact
+            ? {
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                bottom: 0,
+                zIndex: 999,
+                transform: sidebarOpen ? 'translateX(0)' : 'translateX(-105%)',
+                transition: 'transform 0.25s ease-in-out',
+                boxShadow: sidebarOpen ? '8px 0 24px rgba(0,0,0,0.35)' : 'none',
+                paddingTop: 'env(safe-area-inset-top)'
+              }
+            : {})
+        }}
+      >
+        <div style={{ padding: '16px', borderBottom: '1px solid #1e293b', textAlign: 'center', background: 'white', position: 'relative' }}>
+          {isCompact && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close Menu"
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                background: '#f1f5f9',
+                color: '#0f172a',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                width: '30px',
+                height: '30px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              ✕
+            </button>
+          )}
           <img
             src={POMMYS_LOGO_URL}
             alt="Pommys Logo"
-            style={{ height: '44px', objectFit: 'contain' }}
+            style={{ height: '42px', objectFit: 'contain' }}
             onError={(e) => {
               const img = e.currentTarget;
               img.onerror = null;
@@ -240,38 +330,90 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
             <div
               key={item.key}
               style={styles.menuItem(activeMenu === item.key)}
-              onClick={() => setActiveMenu(item.key)}
+              onClick={() => handleSelectMenu(item.key)}
             >
               {item.label}
             </div>
           ))}
         </div>
 
-        <div style={{ padding: '16px', borderTop: '1px solid #1e293b' }}>
+        <div style={{ padding: '14px 16px max(14px, env(safe-area-inset-bottom)) 16px', borderTop: '1px solid #1e293b' }}>
           <button type="button" onClick={onLogout} style={styles.logoutBtn}>Logout</button>
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div style={{ background: 'white', padding: '14px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0, color: '#0f172a', fontSize: '18px' }}>{currentMeta?.title}</h3>
+      {/* Main Content Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%' }}>
+        {/* Top Sticky Header with Mobile Safe Area & Hamburger Button */}
+        <div
+          style={{
+            background: 'white',
+            padding: isCompact
+              ? 'max(12px, env(safe-area-inset-top)) 14px 12px 14px'
+              : '14px 24px',
+            borderBottom: '1px solid #e2e8f0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '10px',
+            flexWrap: 'wrap',
+            position: 'sticky',
+            top: 0,
+            zIndex: 50
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: '1 1 auto' }}>
+            {isCompact && (
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open Menu"
+                style={{
+                  background: '#0f172a',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  fontSize: '15px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >
+                ☰ Menu
+              </button>
+            )}
+            <h3
+              style={{
+                margin: 0,
+                color: '#0f172a',
+                fontSize: isCompact ? '15px' : '18px',
+                lineHeight: 1.3,
+                wordBreak: 'break-word'
+              }}
+            >
+              {currentMeta?.title}
+            </h3>
+          </div>
+
           {hasQuickActions && (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {effectiveMenuKeys.includes('grn') && (
-                <button type="button" onClick={() => setActiveMenu('grn')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New GRN</button>
+                <button type="button" onClick={() => handleSelectMenu('grn')} style={{ ...styles.secondaryBtn, padding: '6px 10px', fontSize: '12px' }}>+ New GRN</button>
               )}
               {effectiveMenuKeys.includes('cutting') && (
-                <button type="button" onClick={() => setActiveMenu('cutting')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>+ New Cutting</button>
+                <button type="button" onClick={() => handleSelectMenu('cutting')} style={{ ...styles.secondaryBtn, padding: '6px 10px', fontSize: '12px' }}>+ New Cutting</button>
               )}
               {effectiveMenuKeys.includes('reports') && (
-                <button type="button" onClick={() => setActiveMenu('reports')} style={{ ...styles.secondaryBtn, padding: '6px 12px', fontSize: '12px' }}>Reports</button>
+                <button type="button" onClick={() => handleSelectMenu('reports')} style={{ ...styles.secondaryBtn, padding: '6px 10px', fontSize: '12px' }}>Reports</button>
               )}
             </div>
           )}
         </div>
 
-        <div style={{ flex: 1, padding: '22px', overflowY: 'auto' }}>
-          {activeMenu === 'dashboard' && <DashboardHome onNavigate={setActiveMenu} allowedMenus={allowedMenus} />}
+        {/* Page Body */}
+        <div style={{ flex: 1, padding: isCompact ? '14px 12px 60px 12px' : '22px', overflowY: 'auto', minWidth: 0 }}>
+          {activeMenu === 'dashboard' && <DashboardHome onNavigate={handleSelectMenu} allowedMenus={allowedMenus} />}
           {activeMenu === 'grn' && <GRNEntryForm />}
           {activeMenu === 'cutting' && <CuttingEntryModule />}
           {activeMenu === 'production' && <ProductionTracking />}
@@ -326,8 +468,8 @@ function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKe
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
         {cards.map((c, idx) => (
           <div
             key={idx}
@@ -343,13 +485,13 @@ function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKe
 
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>Quick Navigation</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
           {allowedMenus.filter(m => m.key !== 'dashboard').map(item => (
             <button
               key={item.key}
               type="button"
               onClick={() => onNavigate(item.key)}
-              style={{ ...styles.secondaryBtn, textAlign: 'left', background: '#f8fafc', border: '1px solid #cbd5e1' }}
+              style={{ ...styles.secondaryBtn, textAlign: 'left', background: '#f8fafc', border: '1px solid #cbd5e1', width: '100%' }}
             >
               {item.label}
             </button>
@@ -466,17 +608,17 @@ function GRNEntryForm() {
 
   return (
     <div style={styles.card}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '15px 25px', borderRadius: '8px', marginBottom: '25px', flexWrap: 'wrap' }}>
-        <h4 style={{ margin: 0, color: '#0369a1', fontSize: '16px' }}>Select Inward Type:</h4>
-        <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '14px 16px', borderRadius: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <h4 style={{ margin: 0, color: '#0369a1', fontSize: '15px' }}>Select Inward Type:</h4>
+        <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: bill.inwardType === 'OWN_FABRIC' ? 'bold' : 'normal' }}><input type="radio" name="inwardType" value="OWN_FABRIC" checked={bill.inwardType === 'OWN_FABRIC'} onChange={handleBillChange} /> 🏭 Own Fabric</label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: bill.inwardType === 'RMG' ? 'bold' : 'normal' }}><input type="radio" name="inwardType" value="RMG" checked={bill.inwardType === 'RMG'} onChange={handleBillChange} /> 👕 RMG (Ready-Made)</label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: bill.inwardType === 'JOB_WORK' ? 'bold' : 'normal' }}><input type="radio" name="inwardType" value="JOB_WORK" checked={bill.inwardType === 'JOB_WORK'} onChange={handleBillChange} /> ✂️ Job Work</label>
         </div>
       </div>
 
-      <h4 style={{ color: '#0f172a', marginBottom: '15px', paddingBottom: '10px', borderBottom: '2px solid #f1f5f9' }}>A) Supplier & Logistics Details</h4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px', marginBottom: '30px' }}>
+      <h4 style={{ color: '#0f172a', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' }}>A) Supplier & Logistics Details</h4>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '24px' }}>
         <div>
           <label style={styles.label}>{isJobWork ? 'Client / Supplier Name' : 'Supplier Name'}</label>
           <select value={bill.isNewSupplier ? 'NEW' : suppliers.find(s => s.name === bill.supplierName)?.id || ''} onChange={handleSupplierSelect} style={styles.input}>
@@ -496,9 +638,9 @@ function GRNEntryForm() {
         <div><label style={styles.label}>Bale No(s).</label><input type="text" name="baleNo" value={bill.baleNo} placeholder="Ex: B-101" onChange={handleBillChange} style={styles.input} /></div>
       </div>
 
-      <h4 style={{ color: '#0f172a', marginBottom: '15px', paddingBottom: '10px', borderBottom: '2px solid #f1f5f9' }}>B) Inventory Breakdown</h4>
-      <div style={{ overflowX: 'auto', marginBottom: '20px', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
-        <table style={{ width: '100%', minWidth: '1450px', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
+      <h4 style={{ color: '#0f172a', marginBottom: '10px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' }}>B) Inventory Breakdown (Swipe horizontally on Mobile)</h4>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: '20px', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
+        <table style={{ width: '100%', minWidth: '1350px', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
           <thead>
             <tr style={{ background: '#0f172a', color: 'white', textAlign: 'center' }}>
               <th colSpan={isRMG ? 2 : 4} style={styles.thGroup}>Fabric Specifications</th>
@@ -570,14 +712,14 @@ function GRNEntryForm() {
         </table>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '12px' }}>
         <button type="button" onClick={handleAddItem} style={styles.secondaryBtn}>+ Add Row</button>
-        {!isJobWork && <div style={{ fontSize: '18px', color: '#0f172a' }}>Grand Total (with GST): <strong style={{ color: '#dc2626' }}>₹ {grandTotal.toFixed(2)}</strong></div>}
+        {!isJobWork && <div style={{ fontSize: '16px', color: '#0f172a' }}>Grand Total (with GST): <strong style={{ color: '#dc2626' }}>₹ {grandTotal.toFixed(2)}</strong></div>}
         <button type="button" onClick={handleSaveGRN} disabled={saving} style={styles.successBtn}>{saving ? 'Saving...' : '💾 Save & Update Stock'}</button>
       </div>
 
       {selectedImageModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: 'white', padding: '20px', borderRadius: '10px', textAlign: 'center', maxWidth: '500px', width: '100%' }}>
             <h4 style={{ margin: '0 0 15px 0' }}>Design Preview</h4>
             <img src={selectedImageModal} alt="Design Preview" style={{ width: '100%', maxHeight: '350px', objectFit: 'contain', borderRadius: '6px', marginBottom: '15px' }} />
@@ -678,30 +820,30 @@ function CuttingEntryModule() {
 
   return (
     <div style={styles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-        <h3 style={{ margin: 0, color: '#0f172a' }}>✂️ Fabric Issue & Cutting</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
+        <h3 style={{ margin: 0, color: '#0f172a', fontSize: '17px' }}>✂️ Fabric Issue & Cutting</h3>
         <button type="button" onClick={handleGenerateCode} style={styles.primaryBtn} disabled={!isFabricSelected}>Generate Batch Code ➡️</button>
       </div>
-      {batchCode && <div style={{ background: '#dcfce7', color: '#166534', padding: '10px 15px', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold' }}>✓ Batch "{batchCode}" generated!</div>}
-      <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '30px' }}>
+      {batchCode && <div style={{ background: '#dcfce7', color: '#166534', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontWeight: 'bold' }}>✓ Batch "{batchCode}" generated!</div>}
+      <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
         <label style={styles.label}>Select from Godown Stock (Multi-Fabric Support):</label>
         {selectedFabrics.map((fab, idx) => (
-          <div key={idx} style={{ display: 'flex', gap: '15px', marginBottom: '10px', flexWrap: 'wrap' }}>
-            <select value={fab.stockId} onChange={(e) => handleFabricChange(idx, 'stockId', e.target.value)} style={{ ...styles.input, flex: 2, minWidth: '240px' }}>
+          <div key={idx} style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
+            <select value={fab.stockId} onChange={(e) => handleFabricChange(idx, 'stockId', e.target.value)} style={{ ...styles.input, flex: '2 1 220px' }}>
               <option value="">-- Search Design & Color --</option>
               {stockList.map(stock => (
-                <option key={stock.id} value={stock.id}>Design: {stock.design_no} | Color: {stock.color} | Available: {stock.available_meters} M</option>
+                <option key={stock.id} value={stock.id}>Design: {stock.design_no} | Color: {stock.color} | Avail: {stock.available_meters} M</option>
               ))}
             </select>
-            <input type="number" placeholder="Issue Meters" value={fab.issueMeters} onChange={(e) => handleFabricChange(idx, 'issueMeters', e.target.value)} style={{ ...styles.input, flex: 1, minWidth: '140px' }} disabled={!fab.stockId} />
-            {idx > 0 && <button type="button" onClick={() => handleRemoveFabricRow(idx)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '0 15px', cursor: 'pointer', fontWeight: 'bold' }}>X</button>}
+            <input type="number" placeholder="Issue Meters" value={fab.issueMeters} onChange={(e) => handleFabricChange(idx, 'issueMeters', e.target.value)} style={{ ...styles.input, flex: '1 1 130px' }} disabled={!fab.stockId} />
+            {idx > 0 && <button type="button" onClick={() => handleRemoveFabricRow(idx)} style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '8px 14px', cursor: 'pointer', fontWeight: 'bold' }}>X</button>}
           </div>
         ))}
-        <button type="button" onClick={handleAddFabricRow} style={{ ...styles.secondaryBtn, marginTop: '10px' }}>+ Add Another Fabric</button>
+        <button type="button" onClick={handleAddFabricRow} style={{ ...styles.secondaryBtn, marginTop: '8px' }}>+ Add Another Fabric</button>
       </div>
       <div style={{ opacity: isFabricSelected ? 1 : 0.5, pointerEvents: isFabricSelected ? 'auto' : 'none' }}>
-        <h4 style={{ color: '#334155', marginBottom: '15px' }}>Cutting Details</h4>
-        <div style={{ marginBottom: '20px', maxWidth: '420px' }}>
+        <h4 style={{ color: '#334155', marginBottom: '12px' }}>Cutting Details</h4>
+        <div style={{ marginBottom: '18px', maxWidth: '420px' }}>
           <label style={styles.label}>Model Name:</label>
           <select value={modelSelection} onChange={(e) => setModelSelection(e.target.value)} style={{ ...styles.input, marginBottom: '10px' }}>
             <option value="">-- Select Model --</option>
@@ -710,20 +852,20 @@ function CuttingEntryModule() {
           </select>
           {modelSelection === 'NEW' && <input type="text" placeholder="Enter New Model Name" value={customModel} onChange={(e) => setCustomModel(e.target.value)} style={{ ...styles.input, borderColor: '#3b82f6' }} />}
         </div>
-        <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+        <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', marginBottom: '18px' }}>
           <label style={styles.label}>Size-wise Cutting & Consumption:</label>
           {sizes.map((s, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: '15px', marginBottom: '10px', flexWrap: 'wrap' }}>
-              <input type="text" placeholder="Size (L, XL)" value={s.size} onChange={(e) => handleSizeChange(idx, 'size', e.target.value)} style={{ ...styles.input, width: '150px' }} />
-              <input type="number" placeholder="Pieces" value={s.pieces} onChange={(e) => handleSizeChange(idx, 'pieces', e.target.value)} style={{ ...styles.input, width: '150px' }} />
-              <input type="number" placeholder="Consumption (M/Pc)" value={s.consumption} onChange={(e) => handleSizeChange(idx, 'consumption', e.target.value)} style={{ ...styles.input, width: '200px', borderColor: '#3b82f6' }} />
+            <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+              <input type="text" placeholder="Size (L, XL)" value={s.size} onChange={(e) => handleSizeChange(idx, 'size', e.target.value)} style={styles.input} />
+              <input type="number" placeholder="Pieces" value={s.pieces} onChange={(e) => handleSizeChange(idx, 'pieces', e.target.value)} style={styles.input} />
+              <input type="number" placeholder="Consumption (M/Pc)" value={s.consumption} onChange={(e) => handleSizeChange(idx, 'consumption', e.target.value)} style={{ ...styles.input, borderColor: '#3b82f6' }} />
             </div>
           ))}
           <button type="button" onClick={handleAddSize} style={styles.secondaryBtn}>+ Add Size</button>
         </div>
-        <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-            <label style={{ fontWeight: 'bold', color: '#dc2626' }}>End Bits (Meters):</label>
+        <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ fontWeight: 'bold', color: '#dc2626', fontSize: '13px' }}>End Bits (Meters):</label>
             <input type="number" placeholder="Meters" value={endBits} onChange={(e) => setEndBits(e.target.value)} style={{ ...styles.input, width: '120px' }} />
           </div>
           <button type="button" onClick={handleSaveBatch} disabled={saving} style={styles.successBtn}>{saving ? 'Saving...' : '💾 Save Batch & Send to WIP'}</button>
@@ -764,9 +906,9 @@ function ProductionTracking() {
 
   return (
     <div style={styles.card}>
-      <h3 style={{ margin: '0 0 20px 0', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px' }}>🏭 Live Production Tracking (WIP)</h3>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
+      <h3 style={{ margin: '0 0 16px 0', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', fontSize: '17px' }}>🏭 Live Production Tracking (WIP)</h3>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: '100%', minWidth: '560px', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
           <thead>
             <tr style={{ background: '#1e293b', color: 'white' }}>
               <th style={styles.thSub}>Batch Code</th>
@@ -787,10 +929,10 @@ function ProductionTracking() {
                   <td style={styles.td}>{batch.model_name}</td>
                   <td style={styles.td}>{batch.total_pieces}</td>
                   <td style={styles.td}>
-                    <span style={{ background: '#fef3c7', color: '#b45309', padding: '5px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>{batch.current_status}</span>
+                    <span style={{ background: '#fef3c7', color: '#b45309', padding: '5px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{batch.current_status}</span>
                   </td>
                   <td style={styles.td}>
-                    {nextStat && <button type="button" onClick={() => updateStatus(batch, nextStat)} style={{ ...styles.primaryBtn, padding: '6px 12px', fontSize: '12px' }}>Move to {nextStat} ➡️</button>}
+                    {nextStat && <button type="button" onClick={() => updateStatus(batch, nextStat)} style={{ ...styles.primaryBtn, padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}>Move to {nextStat} ➡️</button>}
                   </td>
                 </tr>
               );
@@ -824,32 +966,34 @@ function StoreRoomModule() {
   return (
     <div style={styles.card}>
       <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>🏪 Store Room, Trims & Accessories</h4>
-      <form onSubmit={addTrim} style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <input type="text" placeholder="Trim / Accessory Name" value={itemName} onChange={(e) => setItemName(e.target.value)} style={{ ...styles.input, maxWidth: '260px' }} />
-        <select value={unit} onChange={(e) => setUnit(e.target.value)} style={{ ...styles.input, maxWidth: '140px' }}>
+      <form onSubmit={addTrim} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+        <input type="text" placeholder="Trim / Accessory Name" value={itemName} onChange={(e) => setItemName(e.target.value)} style={styles.input} />
+        <select value={unit} onChange={(e) => setUnit(e.target.value)} style={styles.input}>
           <option value="Mtr">Mtr</option>
           <option value="Roll">Roll</option>
           <option value="Packet">Packet</option>
           <option value="Pcs">Pcs</option>
         </select>
-        <input type="number" placeholder="Quantity" value={qty} onChange={(e) => setQty(e.target.value)} style={{ ...styles.input, maxWidth: '140px' }} />
+        <input type="number" placeholder="Quantity" value={qty} onChange={(e) => setQty(e.target.value)} style={styles.input} />
         <button type="submit" style={styles.primaryBtn}>+ Add Trim Stock</button>
       </form>
-      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-        <thead><tr style={{ background: '#0f172a', color: 'white' }}>
-          <th style={styles.thSub}>Trim / Accessory</th><th style={styles.thSub}>Unit</th><th style={styles.thSub}>Available Qty</th><th style={styles.thSub}>Status</th>
-        </tr></thead>
-        <tbody>
-          {trims.map(t => (
-            <tr key={t.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <td style={styles.td}><strong>{t.name}</strong></td>
-              <td style={styles.td}>{t.unit}</td>
-              <td style={styles.td}>{t.qty}</td>
-              <td style={styles.td}>{t.qty <= t.reorder ? '⚠️ Low Stock' : '✅ Sufficient'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: '100%', minWidth: '480px', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead><tr style={{ background: '#0f172a', color: 'white' }}>
+            <th style={styles.thSub}>Trim / Accessory</th><th style={styles.thSub}>Unit</th><th style={styles.thSub}>Available Qty</th><th style={styles.thSub}>Status</th>
+          </tr></thead>
+          <tbody>
+            {trims.map(t => (
+              <tr key={t.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                <td style={styles.td}><strong>{t.name}</strong></td>
+                <td style={styles.td}>{t.unit}</td>
+                <td style={styles.td}>{t.qty}</td>
+                <td style={styles.td}>{t.qty <= t.reorder ? '⚠️ Low Stock' : '✅ Sufficient'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -888,8 +1032,8 @@ function ReadyStockModule({ canDelete }: { canDelete: boolean }) {
   return (
     <div style={styles.card}>
       <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>👕 Finished Ready Stock Godown</h4>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: '100%', minWidth: '460px', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ background: '#0f172a', color: 'white' }}>
               <th style={styles.thSub}>Batch Code</th>
@@ -950,15 +1094,15 @@ function SalesmanCatalogModule({ hideCostRate }: { hideCostRate: boolean }) {
   return (
     <div style={styles.card}>
       <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>📒 Pommys Design Catalog</h4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '14px' }}>
         {designs.length === 0 ? (
           <p style={{ color: '#64748b' }}>No catalog designs available yet.</p>
         ) : designs.map((d, i) => (
-          <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', background: '#f8fafc' }}>
+          <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px', background: '#f8fafc' }}>
             {d.image_url ? (
-              <img src={d.image_url} alt={d.design_no || 'Design'} style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '6px', marginBottom: '10px' }} />
+              <img src={d.image_url} alt={d.design_no || 'Design'} style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: '6px', marginBottom: '10px' }} />
             ) : (
-              <div style={{ height: '140px', background: '#e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px', color: '#64748b', fontSize: '12px' }}>No Image</div>
+              <div style={{ height: '160px', background: '#e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px', color: '#64748b', fontSize: '12px' }}>No Image</div>
             )}
             <div style={{ fontWeight: 'bold', color: '#0f172a' }}>Design: {d.design_no || '-'}</div>
             <div style={{ fontSize: '12px', color: '#475569' }}>Item: {d.item_name || '-'} | Color: {d.color || '-'}</div>
@@ -985,13 +1129,13 @@ function CostingRateFixerModule() {
   return (
     <div style={styles.card}>
       <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>🧮 Garment Costing & Rate Fixer</h4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginBottom: '20px' }}>
         <div><label style={styles.label}>Fabric Cost / Pc (₹)</label><input type="number" value={fabricCost} onChange={(e) => setFabricCost(e.target.value)} style={styles.input} /></div>
         <div><label style={styles.label}>Stitching / Jobwork (₹)</label><input type="number" value={stitchingCost} onChange={(e) => setStitchingCost(e.target.value)} style={styles.input} /></div>
         <div><label style={styles.label}>Trims & Packing (₹)</label><input type="number" value={trimsCost} onChange={(e) => setTrimsCost(e.target.value)} style={styles.input} /></div>
         <div><label style={styles.label}>Target Margin (%)</label><input type="number" value={marginPct} onChange={(e) => setMarginPct(e.target.value)} style={styles.input} /></div>
       </div>
-      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '16px', borderRadius: '8px', display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
+      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '16px', borderRadius: '8px', display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
         <div><strong>Net Cost / Pc:</strong> ₹ {totalCost.toFixed(2)}</div>
         <div><strong style={{ color: '#059669' }}>Suggested Rate: ₹ {sellingPrice.toFixed(2)}</strong></div>
       </div>
@@ -1021,29 +1165,31 @@ function TailorLedgerModule() {
   return (
     <div style={styles.card}>
       <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>🧵 Tailor Ledger & Job-Work</h4>
-      <form onSubmit={addEntry} style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <input type="text" placeholder="Tailor / Unit Name" value={tailor} onChange={(e) => setTailor(e.target.value)} style={{ ...styles.input, maxWidth: '220px' }} />
-        <input type="text" placeholder="Batch Code" value={batch} onChange={(e) => setBatch(e.target.value)} style={{ ...styles.input, maxWidth: '170px' }} />
-        <input type="number" placeholder="Pieces" value={pcs} onChange={(e) => setPcs(e.target.value)} style={{ ...styles.input, maxWidth: '120px' }} />
-        <input type="number" placeholder="Rate / Pc" value={rate} onChange={(e) => setRate(e.target.value)} style={{ ...styles.input, maxWidth: '120px' }} />
+      <form onSubmit={addEntry} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+        <input type="text" placeholder="Tailor / Unit Name" value={tailor} onChange={(e) => setTailor(e.target.value)} style={styles.input} />
+        <input type="text" placeholder="Batch Code" value={batch} onChange={(e) => setBatch(e.target.value)} style={styles.input} />
+        <input type="number" placeholder="Pieces" value={pcs} onChange={(e) => setPcs(e.target.value)} style={styles.input} />
+        <input type="number" placeholder="Rate / Pc" value={rate} onChange={(e) => setRate(e.target.value)} style={styles.input} />
         <button type="submit" style={styles.primaryBtn}>+ Record Jobwork</button>
       </form>
-      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-        <thead><tr style={{ background: '#0f172a', color: 'white' }}>
-          <th style={styles.thSub}>Tailor / Unit</th><th style={styles.thSub}>Batch</th><th style={styles.thSub}>Pieces</th><th style={styles.thSub}>Amount (₹)</th><th style={styles.thSub}>Status</th>
-        </tr></thead>
-        <tbody>
-          {entries.map(en => (
-            <tr key={en.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <td style={styles.td}><strong>{en.tailor}</strong></td>
-              <td style={styles.td}>{en.batch}</td>
-              <td style={styles.td}>{en.pcs}</td>
-              <td style={styles.td}>₹ {(en.pcs * en.rate).toFixed(2)}</td>
-              <td style={styles.td}>{en.status}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <table style={{ width: '100%', minWidth: '520px', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead><tr style={{ background: '#0f172a', color: 'white' }}>
+            <th style={styles.thSub}>Tailor / Unit</th><th style={styles.thSub}>Batch</th><th style={styles.thSub}>Pieces</th><th style={styles.thSub}>Amount (₹)</th><th style={styles.thSub}>Status</th>
+          </tr></thead>
+          <tbody>
+            {entries.map(en => (
+              <tr key={en.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                <td style={styles.td}><strong>{en.tailor}</strong></td>
+                <td style={styles.td}>{en.batch}</td>
+                <td style={styles.td}>{en.pcs}</td>
+                <td style={styles.td}>₹ {(en.pcs * en.rate).toFixed(2)}</td>
+                <td style={styles.td}>{en.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -1220,8 +1366,8 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
   const rightsTargetUser = users.find(u => u.id === rightsUserId);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
         <div style={{ ...styles.card, borderTop: '4px solid #dc2626' }}>
           <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>ADMIN QUOTA</div>
           <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#0f172a', marginTop: '4px' }}>{adminCount} / 1</div>
@@ -1242,11 +1388,11 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
 
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>➕ Create New User Login (Office / Salesman / Customer)</h4>
-        <form onSubmit={handleAddUser} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <input type="text" placeholder="Full Name / Shop Name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={{ ...styles.input, maxWidth: '210px' }} required />
-          <input type="text" placeholder="Mobile Number (Username)" value={mobile} onChange={(e) => setMobile(e.target.value)} style={{ ...styles.input, maxWidth: '190px' }} required />
-          <input type="text" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...styles.input, maxWidth: '160px' }} required />
-          <select value={role} onChange={(e) => setRole(e.target.value as UserRole)} style={{ ...styles.input, maxWidth: '170px' }}>
+        <form onSubmit={handleAddUser} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
+          <input type="text" placeholder="Full Name / Shop Name" value={fullName} onChange={(e) => setFullName(e.target.value)} style={styles.input} required />
+          <input type="text" placeholder="Mobile Number (Username)" value={mobile} onChange={(e) => setMobile(e.target.value)} style={styles.input} required />
+          <input type="text" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} style={styles.input} required />
+          <select value={role} onChange={(e) => setRole(e.target.value as UserRole)} style={styles.input}>
             <option value="OFFICE">OFFICE (Max 5)</option>
             <option value="SALESMAN">SALESMAN (Max 5)</option>
             <option value="CUSTOMER">CUSTOMER (Unlimited)</option>
@@ -1268,7 +1414,7 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '10px', marginBottom: '16px' }}>
             {MENU_ITEMS.map(m => {
               const checked = selectedRights.includes(m.key);
               return (
@@ -1298,7 +1444,7 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
             })}
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={() => handleSaveRights(rightsTargetUser.id)}
@@ -1320,8 +1466,8 @@ function SecurityAdminModule({ currentUser }: { currentUser: any }) {
 
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>👥 Active User Credentials & Rights List</h4>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: '720px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#0f172a', color: 'white' }}>
                 <th style={styles.thSub}>Name</th>
@@ -1547,50 +1693,54 @@ function ReportsModule() {
 
   return (
     <div style={styles.card}>
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px', flexWrap: 'wrap' }}>
         <button type="button" onClick={() => setTab('godown')} style={{ ...styles.secondaryBtn, background: tab === 'godown' ? '#1e293b' : 'transparent', color: tab === 'godown' ? 'white' : '#475569' }}>📦 Fabric Godown Stock</button>
         <button type="button" onClick={() => setTab('ready')} style={{ ...styles.secondaryBtn, background: tab === 'ready' ? '#1e293b' : 'transparent', color: tab === 'ready' ? 'white' : '#475569' }}>👕 Finished Ready Stock</button>
         <button type="button" onClick={() => setTab('history')} style={{ ...styles.secondaryBtn, background: tab === 'history' ? '#1e293b' : 'transparent', color: tab === 'history' ? 'white' : '#475569' }}>📅 Supplier Date-wise History</button>
       </div>
 
       {tab === 'godown' && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead><tr style={{ background: '#0f172a', color: 'white' }}>
-            <th style={styles.thSub}>Item</th><th style={styles.thSub}>Design</th><th style={styles.thSub}>Color</th><th style={styles.thSub}>Design Photo</th><th style={styles.thSub}>Available (M)</th>
-          </tr></thead>
-          <tbody>
-            {godownStock.map((s, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={styles.td}>{s.item_name}</td><td style={styles.td}>{s.design_no}</td><td style={styles.td}>{s.color}</td>
-                <td style={styles.td}>
-                  {s.image_url ? <button type="button" onClick={() => setSelectedImage(s.image_url)} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>View Photo</button> : 'No Image'}
-                </td>
-                <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{s.available_meters}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: '540px', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead><tr style={{ background: '#0f172a', color: 'white' }}>
+              <th style={styles.thSub}>Item</th><th style={styles.thSub}>Design</th><th style={styles.thSub}>Color</th><th style={styles.thSub}>Design Photo</th><th style={styles.thSub}>Available (M)</th>
+            </tr></thead>
+            <tbody>
+              {godownStock.map((s, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={styles.td}>{s.item_name}</td><td style={styles.td}>{s.design_no}</td><td style={styles.td}>{s.color}</td>
+                  <td style={styles.td}>
+                    {s.image_url ? <button type="button" onClick={() => setSelectedImage(s.image_url)} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>View Photo</button> : 'No Image'}
+                  </td>
+                  <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{s.available_meters}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {tab === 'ready' && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead><tr style={{ background: '#0f172a', color: 'white' }}>
-            <th style={styles.thSub}>Batch Ref</th><th style={styles.thSub}>Model Name</th><th style={styles.thSub}>Ready Pieces</th>
-          </tr></thead>
-          <tbody>
-            {readyStock.map((s, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={styles.td}>{s.batch_code}</td><td style={styles.td}>{s.model_name}</td>
-                <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{s.ready_pieces}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: '420px', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead><tr style={{ background: '#0f172a', color: 'white' }}>
+              <th style={styles.thSub}>Batch Ref</th><th style={styles.thSub}>Model Name</th><th style={styles.thSub}>Ready Pieces</th>
+            </tr></thead>
+            <tbody>
+              {readyStock.map((s, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={styles.td}>{s.batch_code}</td><td style={styles.td}>{s.model_name}</td>
+                  <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{s.ready_pieces}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {tab === 'history' && (
         <div>
-          <div style={{ display: 'flex', gap: '15px', background: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #cbd5e1', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px', background: '#f8fafc', padding: '14px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #cbd5e1', alignItems: 'end' }}>
             <div>
               <label style={styles.label}>Filter by Supplier:</label>
               <input type="text" placeholder="Search Supplier Name" value={selectedSupplier} onChange={(e) => setSelectedSupplier(e.target.value)} style={styles.tblInput} />
@@ -1603,8 +1753,8 @@ function ReportsModule() {
               <label style={styles.label}>To Date:</label>
               <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={styles.tblInput} />
             </div>
-            <div style={{ alignSelf: 'flex-end' }}>
-              <button type="button" onClick={() => { setSelectedSupplier(''); setStartDate(''); setEndDate(''); }} style={{ ...styles.secondaryBtn, padding: '8px 12px', fontSize: '12px' }}>Clear Filters</button>
+            <div>
+              <button type="button" onClick={() => { setSelectedSupplier(''); setStartDate(''); setEndDate(''); }} style={{ ...styles.secondaryBtn, padding: '8px 12px', fontSize: '12px', width: '100%' }}>Clear Filters</button>
             </div>
           </div>
 
@@ -1612,28 +1762,30 @@ function ReportsModule() {
             <p style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>No matching records found.</p>
           ) : (
             filteredHistory.map((bill, i) => (
-              <div key={i} style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '15px', marginBottom: '15px' }}>
+              <div key={i} style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '14px', marginBottom: '15px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                   <div><strong>Supplier:</strong> {bill.supplier_name} | <strong>Bill No:</strong> {bill.bill_no}</div>
                   <div><strong>Date:</strong> {bill.bill_date || 'N/A'}</div>
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                  <thead><tr style={{ background: '#e2e8f0', color: '#334155' }}>
-                    <th style={styles.thSub}>Item</th><th style={styles.thSub}>Design</th><th style={styles.thSub}>Color</th><th style={styles.thSub}>Rate</th><th style={styles.thSub}>GST %</th><th style={styles.thSub}>Net Qty</th><th style={styles.thSub}>Photo</th>
-                  </tr></thead>
-                  <tbody>
-                    {bill.pommys_fabric_stock?.map((st: any, idx: number) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={styles.td}>{st.item_name}</td><td style={styles.td}>{st.design_no}</td><td style={styles.td}>{st.color}</td>
-                        <td style={styles.td}>₹{st.rate_per_meter}</td><td style={styles.td}>{st.gst_percentage}%</td>
-                        <td style={styles.td}>{st.net_meters}</td>
-                        <td style={styles.td}>
-                          {st.image_url ? <button type="button" onClick={() => setSelectedImage(st.image_url)} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>View</button> : '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                  <table style={{ width: '100%', minWidth: '580px', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead><tr style={{ background: '#e2e8f0', color: '#334155' }}>
+                      <th style={styles.thSub}>Item</th><th style={styles.thSub}>Design</th><th style={styles.thSub}>Color</th><th style={styles.thSub}>Rate</th><th style={styles.thSub}>GST %</th><th style={styles.thSub}>Net Qty</th><th style={styles.thSub}>Photo</th>
+                    </tr></thead>
+                    <tbody>
+                      {bill.pommys_fabric_stock?.map((st: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={styles.td}>{st.item_name}</td><td style={styles.td}>{st.design_no}</td><td style={styles.td}>{st.color}</td>
+                          <td style={styles.td}>₹{st.rate_per_meter}</td><td style={styles.td}>{st.gst_percentage}%</td>
+                          <td style={styles.td}>{st.net_meters}</td>
+                          <td style={styles.td}>
+                            {st.image_url ? <button type="button" onClick={() => setSelectedImage(st.image_url)} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>View</button> : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ))
           )}
@@ -1641,7 +1793,7 @@ function ReportsModule() {
       )}
 
       {selectedImage && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: 'white', padding: '20px', borderRadius: '10px', textAlign: 'center', maxWidth: '500px', width: '100%' }}>
             <h4 style={{ margin: '0 0 15px 0' }}>Design Preview</h4>
             <img src={selectedImage} alt="Design Preview" style={{ width: '100%', maxHeight: '350px', objectFit: 'contain', borderRadius: '6px', marginBottom: '15px' }} />
@@ -1655,16 +1807,16 @@ function ReportsModule() {
 
 // Centralized Styles
 const styles = {
-  card: { background: 'white', padding: '22px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.03)' },
-  input: { padding: '10px 14px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', width: '100%', boxSizing: 'border-box' as const, outline: 'none' },
+  card: { background: 'white', padding: '18px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.03)', minWidth: 0, boxSizing: 'border-box' as const },
+  input: { padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '14px', width: '100%', boxSizing: 'border-box' as const, outline: 'none' },
   tblInput: { padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', width: '100%', boxSizing: 'border-box' as const, outline: 'none' },
   label: { display: 'block', fontSize: '12px', color: '#475569', marginBottom: '6px', fontWeight: 'bold' },
-  primaryBtn: { background: '#2563eb', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
-  successBtn: { background: '#059669', color: 'white', padding: '12px 24px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
-  secondaryBtn: { background: '#e2e8f0', color: '#475569', padding: '10px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
-  logoutBtn: { background: 'transparent', color: '#f87171', border: '1px solid #f87171', padding: '8px', borderRadius: '6px', width: '100%', cursor: 'pointer' },
-  menuItem: (isActive: boolean) => ({ padding: '11px 18px', cursor: 'pointer', color: isActive ? 'white' : '#94a3b8', background: isActive ? '#1e293b' : 'transparent', borderLeft: isActive ? '4px solid #dc2626' : '4px solid transparent', fontWeight: isActive ? 'bold' : 'normal', fontSize: '13px' }),
+  primaryBtn: { background: '#2563eb', color: 'white', padding: '10px 18px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' },
+  successBtn: { background: '#059669', color: 'white', padding: '12px 22px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' },
+  secondaryBtn: { background: '#e2e8f0', color: '#475569', padding: '9px 14px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' },
+  logoutBtn: { background: 'transparent', color: '#f87171', border: '1px solid #f87171', padding: '9px', borderRadius: '6px', width: '100%', cursor: 'pointer', fontWeight: 'bold' },
+  menuItem: (isActive: boolean) => ({ padding: '12px 18px', cursor: 'pointer', color: isActive ? 'white' : '#94a3b8', background: isActive ? '#1e293b' : 'transparent', borderLeft: isActive ? '4px solid #dc2626' : '4px solid transparent', fontWeight: isActive ? 'bold' : 'normal', fontSize: '14px' }),
   thGroup: { padding: '10px', fontSize: '13px', borderRight: '1px solid #1e293b', borderBottom: '1px solid #334155' },
-  thSub: { padding: '10px 8px', fontWeight: 'normal', fontSize: '12px', borderRight: '1px solid #334155' },
+  thSub: { padding: '10px 8px', fontWeight: 'normal', fontSize: '12px', borderRight: '1px solid #334155', whiteSpace: 'nowrap' as const },
   td: { padding: '8px', borderRight: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0', fontSize: '13px' }
 };
