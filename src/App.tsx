@@ -11,6 +11,19 @@ const initialSuppliers = [
   { id: 2, name: 'Sri Ram Textiles', address: 'Tiruppur, TN - 641604', gst: '33AABCS1234H1Z5' }
 ];
 
+const INITIAL_SHOWROOMS = [
+  'Madurai',
+  'Trichy',
+  'Nellai',
+  'Ambattur',
+  'Tambaram',
+  'Camp Road',
+  'Medavakkam',
+  'Salem',
+  'Erode',
+  'Guduvanchery'
+];
+
 const POMMYS_LOGO_URL = "https://chaodxrbgiqotdxxvjcj.supabase.co/storage/v1/object/public/assets/Pommys%20Logo%20Jepeg.jpg";
 
 type UserRole = 'ADMIN' | 'OFFICE' | 'SALESMAN' | 'CUSTOMER';
@@ -46,15 +59,15 @@ const ALL_MENU_KEYS: MenuKey[] = [
 
 const MENU_ITEMS: { key: MenuKey; label: string; title: string; roles: UserRole[] }[] = [
   { key: 'dashboard', label: '🏠 Dashboard Overview', title: 'Pommys Garment ERP — Executive Dashboard', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'grn', label: '📥 Purchase & GRN', title: 'Goods Receipt Note (Master GRN)', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'cutting', label: '✂️ Fabric Issue & Cutting', title: 'Fabric Issue & Cutting Module', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'production', label: '🏭 Production WIP', title: 'Live Production Tracking (WIP)', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'grn', label: '📥 Purchase & GRN', title: 'Goods Receipt Note & Opening Stock (Master GRN)', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'cutting', label: '✂️ Fabric Issue & Cutting', title: 'Fabric Issue, Cutparts & Cutting Module', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'production', label: '🏭 Production WIP', title: 'Live Production Tracking & Partial WIP', roles: ['ADMIN', 'OFFICE'] },
   { key: 'storeroom', label: '🏪 Store Room & Trims', title: 'Store Room, Accessories & Trims Stock', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'readystock', label: '👕 Ready Stock Godown', title: 'Finished Ready Stock & Dispatch Register', roles: ['ADMIN', 'OFFICE', 'SALESMAN'] },
+  { key: 'readystock', label: '👕 Ready Stock & Showrooms', title: 'Ready Stock Godown & Retail Showroom Stock Bifurcation', roles: ['ADMIN', 'OFFICE', 'SALESMAN'] },
   { key: 'catalog', label: '📒 Salesman & Customer Catalog', title: 'Design Catalog & Sample Sheet', roles: ['ADMIN', 'OFFICE', 'SALESMAN', 'CUSTOMER'] },
   { key: 'costing', label: '🧮 Costing & Rate Fixer', title: 'Garment Costing & Wholesale/Retail Rate Fixer', roles: ['ADMIN'] },
   { key: 'tailor', label: '🧵 Tailor Ledger & Jobwork', title: 'Tailor & Stitching Job-Work Ledger', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'reports', label: '📊 Master Reports & History', title: 'Godown, Ready Stock & Supplier History Reports', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'reports', label: '📊 Master Reports & History', title: 'Godown, Showroom Stock & Supplier History Reports', roles: ['ADMIN', 'OFFICE'] },
   { key: 'security', label: '🔐 Security & Admin', title: 'User Roles, Rights & User Manager', roles: ['ADMIN'] },
   { key: 'yearclosing', label: '📁 Year Closing & Backup', title: 'Financial Year Closing & Data Backup Center', roles: ['ADMIN'] }
 ];
@@ -175,7 +188,6 @@ function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
           Select Login Option
         </p>
 
-        {/* 4 Separate Login Options */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '18px' }}>
           {LOGIN_TABS.map(tab => {
             const isSelected = selectedPortal === tab.role;
@@ -227,7 +239,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
   );
 }
 
-// 2. Responsive Dashboard Layout (Mobile Drawer + Desktop Fixed Sidebar)
+// 2. Responsive Dashboard Layout
 function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
   const isCompact = useIsMobileOrTablet();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -249,7 +261,6 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', width: '100%', maxWidth: '100vw', overflowX: 'hidden', background: '#f8fafc', fontFamily: '"Segoe UI", Tahoma, sans-serif' }}>
-      {/* Mobile/Tablet Backdrop Overlay */}
       {isCompact && sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
@@ -262,7 +273,6 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
         />
       )}
 
-      {/* Sidebar (Slide-out Drawer on Mobile/Tablet, Fixed on Desktop) */}
       <div
         style={{
           width: '265px',
@@ -342,9 +352,7 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
         </div>
       </div>
 
-      {/* Main Content Area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%' }}>
-        {/* Top Sticky Header with Mobile Safe Area & Hamburger Button */}
         <div
           style={{
             background: 'white',
@@ -411,14 +419,13 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
           )}
         </div>
 
-        {/* Page Body */}
         <div style={{ flex: 1, padding: isCompact ? '14px 12px 60px 12px' : '22px', overflowY: 'auto', minWidth: 0 }}>
           {activeMenu === 'dashboard' && <DashboardHome onNavigate={handleSelectMenu} allowedMenus={allowedMenus} />}
           {activeMenu === 'grn' && <GRNEntryForm />}
           {activeMenu === 'cutting' && <CuttingEntryModule />}
           {activeMenu === 'production' && <ProductionTracking />}
           {activeMenu === 'storeroom' && <StoreRoomModule />}
-          {activeMenu === 'readystock' && <ReadyStockModule canDelete={role === 'ADMIN'} />}
+          {activeMenu === 'readystock' && <ReadyStockShowroomModule canDelete={role === 'ADMIN'} />}
           {activeMenu === 'catalog' && <SalesmanCatalogModule hideCostRate={role === 'CUSTOMER'} />}
           {activeMenu === 'costing' && <CostingRateFixerModule />}
           {activeMenu === 'tailor' && <TailorLedgerModule />}
@@ -431,13 +438,13 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
   );
 }
 
-// 0. Executive Dashboard Overview
+// 0. Executive Dashboard Overview (Including Showroom Transfer Summary)
 function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKey) => void; allowedMenus: typeof MENU_ITEMS }) {
   const [stats, setStats] = useState({
     fabricMeters: 0,
     wipCount: 0,
     readyPieces: 0,
-    billsCount: 0
+    transferredPieces: 0
   });
 
   useEffect(() => {
@@ -445,31 +452,32 @@ function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKe
       const { data: fabric } = await supabase.from('pommys_fabric_stock').select('available_meters');
       const { data: wip } = await supabase.from('pommys_production_wip').select('id').neq('current_status', 'Ready Stock');
       const { data: ready } = await supabase.from('pommys_ready_stock').select('ready_pieces');
-      const { data: bills } = await supabase.from('pommys_grn_bills').select('id');
+      const { data: transfers } = await supabase.from('pommys_showroom_transfers').select('transferred_pieces');
 
       const totalMeters = (fabric || []).reduce((acc: number, row: any) => acc + (Number(row.available_meters) || 0), 0);
       const totalReady = (ready || []).reduce((acc: number, row: any) => acc + (Number(row.ready_pieces) || 0), 0);
+      const totalTransferred = (transfers || []).reduce((acc: number, row: any) => acc + (Number(row.transferred_pieces) || 0), 0);
 
       setStats({
         fabricMeters: totalMeters,
         wipCount: (wip || []).length,
         readyPieces: totalReady,
-        billsCount: (bills || []).length
+        transferredPieces: totalTransferred
       });
     };
     loadStats();
   }, []);
 
   const cards = [
-    { label: 'Available Fabric Stock (M)', value: stats.fabricMeters.toFixed(2), color: '#2563eb', target: 'grn' as MenuKey },
+    { label: 'Godown Fabric Stock (M)', value: stats.fabricMeters.toFixed(2), color: '#2563eb', target: 'grn' as MenuKey },
     { label: 'Active WIP Batches', value: String(stats.wipCount), color: '#d97706', target: 'production' as MenuKey },
-    { label: 'Finished Ready Pieces', value: String(stats.readyPieces), color: '#059669', target: 'readystock' as MenuKey },
-    { label: 'Total GRN Bills', value: String(stats.billsCount), color: '#7c3aed', target: 'reports' as MenuKey }
+    { label: 'Godown Ready Pieces', value: String(stats.readyPieces), color: '#059669', target: 'readystock' as MenuKey },
+    { label: 'Showroom Transferred Pcs', value: String(stats.transferredPieces), color: '#7c3aed', target: 'readystock' as MenuKey }
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px' }}>
         {cards.map((c, idx) => (
           <div
             key={idx}
@@ -502,8 +510,17 @@ function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKe
   );
 }
 
-// 3. GRN Master Form
+// 3. GRN Master Form + Color-Wise Quick Rows + Opening / Bulk Entry
 function GRNEntryForm() {
+  const [mode, setMode] = useState<'GRN' | 'OPENING'>('GRN');
+  const [openingStage, setOpeningStage] = useState<'FABRIC' | 'CUTPARTS' | 'WIP' | 'READY'>('FABRIC');
+  const [openingModel, setOpeningModel] = useState('Nighty');
+  const [openingDesign, setOpeningDesign] = useState('');
+  const [openingColor, setOpeningColor] = useState('');
+  const [openingQty, setOpeningQty] = useState('');
+  const [openingBatch, setOpeningBatch] = useState('');
+  const [savingOpening, setSavingOpening] = useState(false);
+
   const [suppliers, setSuppliers] = useState(initialSuppliers);
   const initialBillState = { inwardType: 'OWN_FABRIC', supplierName: '', supplierAddress: '', supplierGst: '', isNewSupplier: false, billNo: '', billDate: '', noOfBales: '', lrNo: '', lrDate: '', baleNo: '' };
   const initialItemState: any = { itemDetails: '', quality: '', width: '', meterFold: '', itemRate: '', gstPercentage: '5', designNo: '', color: '', imageFile: null as File | null, totalMeter: '', totalPieces: '', sizeDetails: '', damage: '', shortage: '', returnEntry: '', returnBooking: '' };
@@ -542,6 +559,25 @@ function GRNEntryForm() {
     setItems(newItems);
   };
   const handleAddItem = () => setItems([...items, { ...initialItemState }]);
+
+  // Color-wise quick row: copies Item, Quality, Width, Fold, Design No, Rate, GST from previous row
+  const handleAddColorVariant = () => {
+    const last = items[items.length - 1] || initialItemState;
+    setItems([
+      ...items,
+      {
+        ...initialItemState,
+        itemDetails: last.itemDetails,
+        quality: last.quality,
+        width: last.width,
+        meterFold: last.meterFold,
+        itemRate: last.itemRate,
+        gstPercentage: last.gstPercentage,
+        designNo: last.designNo,
+        color: ''
+      }
+    ]);
+  };
 
   const grandTotal = isJobWork ? 0 : items.reduce((sum, item) => {
     const qty = isRMG ? (Number(item.totalPieces) || 0) : (Number(item.totalMeter) || 0);
@@ -597,7 +633,7 @@ function GRNEntryForm() {
         setSuppliers([...suppliers, { id: suppliers.length + 1, name: bill.supplierName, address: bill.supplierAddress, gst: bill.supplierGst }]);
       }
 
-      alert("🎉 GRN saved successfully! Items added to Godown Stock.");
+      alert("🎉 GRN saved successfully! Color-wise items added to Godown Stock.");
       setBill(initialBillState);
       setItems([{ ...initialItemState }]);
     } catch (err: any) {
@@ -606,117 +642,245 @@ function GRNEntryForm() {
     setSaving(false);
   };
 
+  // Quick Opening Stock Entry for Fabric / Cutparts / WIP / Ready Goods
+  const handleSaveOpeningStock = async (e: FormEvent) => {
+    e.preventDefault();
+    const numQty = Number(openingQty);
+    if (!numQty || numQty <= 0) {
+      alert('Please enter valid Meter / Pieces quantity.');
+      return;
+    }
+    const batchLabel = openingBatch.trim() || `OPN-${openingStage}-${Math.floor(1000 + Math.random() * 9000)}`;
+    setSavingOpening(true);
+    try {
+      if (openingStage === 'FABRIC') {
+        const { error } = await supabase.from('pommys_fabric_stock').insert([{
+          item_name: `Opening Fabric (${openingModel})`,
+          design_no: openingDesign.trim() || batchLabel,
+          color: openingColor.trim() || 'Assorted',
+          total_meters: numQty,
+          net_meters: numQty,
+          available_meters: numQty,
+          rate_per_meter: 0,
+          gst_percentage: 5
+        }]);
+        if (error) throw error;
+      } else if (openingStage === 'CUTPARTS' || openingStage === 'WIP') {
+        const statusVal = openingStage === 'CUTPARTS' ? 'Cutting' : 'Stitching';
+        const { error } = await supabase.from('pommys_production_wip').insert([{
+          batch_code: batchLabel,
+          model_name: `${openingModel}${openingDesign ? ` - ${openingDesign.trim()}` : ''}${openingColor ? ` (${openingColor.trim()})` : ''}`,
+          total_pieces: numQty,
+          current_status: statusVal
+        }]);
+        if (error) throw error;
+      } else if (openingStage === 'READY') {
+        const { error } = await supabase.from('pommys_ready_stock').insert([{
+          batch_code: batchLabel,
+          model_name: openingModel,
+          design_no: openingDesign.trim() || '-',
+          color: openingColor.trim() || 'Assorted',
+          ready_pieces: numQty
+        }]);
+        if (error) throw error;
+      }
+
+      alert(`✅ Opening ${openingStage} (${numQty}) added to live stock!`);
+      setOpeningDesign('');
+      setOpeningColor('');
+      setOpeningQty('');
+      setOpeningBatch('');
+    } catch (err: any) {
+      alert('Error saving opening entry: ' + (err?.message || String(err)));
+    } finally {
+      setSavingOpening(false);
+    }
+  };
+
   return (
-    <div style={styles.card}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '14px 16px', borderRadius: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <h4 style={{ margin: 0, color: '#0369a1', fontSize: '15px' }}>Select Inward Type:</h4>
-        <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: bill.inwardType === 'OWN_FABRIC' ? 'bold' : 'normal' }}><input type="radio" name="inwardType" value="OWN_FABRIC" checked={bill.inwardType === 'OWN_FABRIC'} onChange={handleBillChange} /> 🏭 Own Fabric</label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: bill.inwardType === 'RMG' ? 'bold' : 'normal' }}><input type="radio" name="inwardType" value="RMG" checked={bill.inwardType === 'RMG'} onChange={handleBillChange} /> 👕 RMG (Ready-Made)</label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: bill.inwardType === 'JOB_WORK' ? 'bold' : 'normal' }}><input type="radio" name="inwardType" value="JOB_WORK" checked={bill.inwardType === 'JOB_WORK'} onChange={handleBillChange} /> ✂️ Job Work</label>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={() => setMode('GRN')}
+          style={{ ...styles.secondaryBtn, background: mode === 'GRN' ? '#0f172a' : '#e2e8f0', color: mode === 'GRN' ? 'white' : '#334155' }}
+        >
+          📥 Purchase & Color-Wise GRN
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('OPENING')}
+          style={{ ...styles.secondaryBtn, background: mode === 'OPENING' ? '#059669' : '#e2e8f0', color: mode === 'OPENING' ? 'white' : '#334155' }}
+        >
+          ⚡ Quick Opening Stock (Fabric / Cutparts / WIP / Ready)
+        </button>
       </div>
 
-      <h4 style={{ color: '#0f172a', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' }}>A) Supplier & Logistics Details</h4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '24px' }}>
-        <div>
-          <label style={styles.label}>{isJobWork ? 'Client / Supplier Name' : 'Supplier Name'}</label>
-          <select value={bill.isNewSupplier ? 'NEW' : suppliers.find(s => s.name === bill.supplierName)?.id || ''} onChange={handleSupplierSelect} style={styles.input}>
-            <option value="">-- Select Existing --</option>
-            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            <option value="NEW" style={{ fontWeight: 'bold', color: '#2563eb' }}>+ Add New Party</option>
-          </select>
-          {bill.isNewSupplier && <input type="text" name="supplierName" placeholder="Enter New Party Name" value={bill.supplierName} onChange={handleBillChange} style={{ ...styles.input, marginTop: '10px', borderColor: '#2563eb' }} />}
+      {mode === 'OPENING' ? (
+        <div style={styles.card}>
+          <h4 style={{ margin: '0 0 12px 0', color: '#0f172a' }}>⚡ Quick Opening Stock Upload (Existing Stock Entry)</h4>
+          <p style={{ fontSize: '13px', color: '#475569', marginTop: 0 }}>
+            கையில் ஏற்கனவே உள்ள Fabric, Cutparts, On-Process (WIP) அல்லது Ready Goods-ஐ ஒரே படிவத்தில் உடனே ஏற்றலாம்.
+          </p>
+          <form onSubmit={handleSaveOpeningStock} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
+            <div>
+              <label style={styles.label}>Stock Stage</label>
+              <select value={openingStage} onChange={(e) => setOpeningStage(e.target.value as any)} style={styles.input}>
+                <option value="FABRIC">Fabric Stock (Meters)</option>
+                <option value="CUTPARTS">Cutparts (Pieces)</option>
+                <option value="WIP">On-Process / Stitching WIP (Pieces)</option>
+                <option value="READY">Ready Goods Godown (Pieces)</option>
+              </select>
+            </div>
+            <div>
+              <label style={styles.label}>Batch / Ref Code</label>
+              <input type="text" placeholder="Auto if blank" value={openingBatch} onChange={(e) => setOpeningBatch(e.target.value)} style={styles.input} />
+            </div>
+            <div>
+              <label style={styles.label}>Model / Item</label>
+              <input type="text" placeholder="Nighty / Kurti / Night Suit" value={openingModel} onChange={(e) => setOpeningModel(e.target.value)} style={styles.input} />
+            </div>
+            <div>
+              <label style={styles.label}>Design No</label>
+              <input type="text" placeholder="Ex: D-501" value={openingDesign} onChange={(e) => setOpeningDesign(e.target.value)} style={styles.input} />
+            </div>
+            <div>
+              <label style={styles.label}>Color</label>
+              <input type="text" placeholder="Ex: Maroon / Navy" value={openingColor} onChange={(e) => setOpeningColor(e.target.value)} style={styles.input} />
+            </div>
+            <div>
+              <label style={styles.label}>Meters / Pieces Qty</label>
+              <input type="number" placeholder="Qty" value={openingQty} onChange={(e) => setOpeningQty(e.target.value)} style={styles.input} required />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button type="submit" disabled={savingOpening} style={{ ...styles.successBtn, width: '100%' }}>
+                {savingOpening ? 'Saving...' : '+ Add Opening Stock'}
+              </button>
+            </div>
+          </form>
         </div>
-        <div><label style={styles.label}>Address</label><input type="text" name="supplierAddress" value={bill.supplierAddress} onChange={handleBillChange} disabled={!bill.isNewSupplier && bill.supplierName !== ''} style={styles.input} /></div>
-        <div><label style={styles.label}>GST Number</label><input type="text" name="supplierGst" value={bill.supplierGst} onChange={handleBillChange} disabled={!bill.isNewSupplier && bill.supplierName !== ''} style={styles.input} /></div>
-        <div><label style={styles.label}>{isJobWork ? 'Challan No.' : 'Bill No.'}</label><input type="text" name="billNo" value={bill.billNo} onChange={handleBillChange} style={styles.input} /></div>
-        <div><label style={styles.label}>{isJobWork ? 'Challan Date' : 'Bill Date'}</label><input type="date" name="billDate" value={bill.billDate} onChange={handleBillChange} style={styles.input} /></div>
-        <div><label style={styles.label}>No. of Bales</label><input type="number" name="noOfBales" value={bill.noOfBales} onChange={handleBillChange} style={styles.input} /></div>
-        <div><label style={styles.label}>LR No.</label><input type="text" name="lrNo" value={bill.lrNo} onChange={handleBillChange} style={styles.input} /></div>
-        <div><label style={styles.label}>LR Date</label><input type="date" name="lrDate" value={bill.lrDate} onChange={handleBillChange} style={styles.input} /></div>
-        <div><label style={styles.label}>Bale No(s).</label><input type="text" name="baleNo" value={bill.baleNo} placeholder="Ex: B-101" onChange={handleBillChange} style={styles.input} /></div>
-      </div>
+      ) : (
+        <div style={styles.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '14px 16px', borderRadius: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <h4 style={{ margin: 0, color: '#0369a1', fontSize: '15px' }}>Select Inward Type:</h4>
+            <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: bill.inwardType === 'OWN_FABRIC' ? 'bold' : 'normal' }}><input type="radio" name="inwardType" value="OWN_FABRIC" checked={bill.inwardType === 'OWN_FABRIC'} onChange={handleBillChange} /> 🏭 Own Fabric</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: bill.inwardType === 'RMG' ? 'bold' : 'normal' }}><input type="radio" name="inwardType" value="RMG" checked={bill.inwardType === 'RMG'} onChange={handleBillChange} /> 👕 RMG (Ready-Made)</label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: bill.inwardType === 'JOB_WORK' ? 'bold' : 'normal' }}><input type="radio" name="inwardType" value="JOB_WORK" checked={bill.inwardType === 'JOB_WORK'} onChange={handleBillChange} /> ✂️ Job Work</label>
+            </div>
+          </div>
 
-      <h4 style={{ color: '#0f172a', marginBottom: '10px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' }}>B) Inventory Breakdown (Swipe horizontally on Mobile)</h4>
-      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: '20px', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
-        <table style={{ width: '100%', minWidth: '1350px', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
-          <thead>
-            <tr style={{ background: '#0f172a', color: 'white', textAlign: 'center' }}>
-              <th colSpan={isRMG ? 2 : 4} style={styles.thGroup}>Fabric Specifications</th>
-              <th colSpan={3} style={styles.thGroup}>Design Variant</th>
-              <th colSpan={isJobWork ? 1 : 4} style={styles.thGroup}>{isJobWork ? 'Quantity' : 'Pricing & GST (₹)'}</th>
-              <th colSpan={3} style={styles.thGroup}>Deductions</th>
-              <th style={{ ...styles.thGroup, background: '#059669', borderRight: 'none' }}>Final</th>
-            </tr>
-            <tr style={{ background: '#1e293b', color: '#e2e8f0' }}>
-              <th style={{ ...styles.thSub, width: '120px' }}>Item Details</th>
-              {!isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Quality</th>}
-              {!isRMG && <th style={{ ...styles.thSub, width: '70px' }}>Width</th>}
-              {!isRMG && <th style={{ ...styles.thSub, width: '70px' }}>Fold</th>}
-              {isRMG && <th style={{ ...styles.thSub, width: '90px', color: '#38bdf8' }}>Size</th>}
-              <th style={{ ...styles.thSub, width: '90px' }}>Design No</th>
-              <th style={{ ...styles.thSub, width: '90px' }}>Color</th>
-              <th style={{ ...styles.thSub, width: '150px' }}>Image Upload / View</th>
-              {!isJobWork && <th style={{ ...styles.thSub, width: '80px', color: '#fbbf24' }}>Rate</th>}
-              {!isJobWork && <th style={{ ...styles.thSub, width: '70px', color: '#38bdf8' }}>GST %</th>}
-              {!isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Total Mtr</th>}
-              {isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Total Pcs</th>}
-              {!isJobWork && <th style={{ ...styles.thSub, width: '100px' }}>Total Val</th>}
-              <th style={{ ...styles.thSub, width: '70px' }}>Dmg</th>
-              <th style={{ ...styles.thSub, width: '70px' }}>Short</th>
-              <th style={{ ...styles.thSub, width: '110px' }}>Return</th>
-              <th style={{ ...styles.thSub, width: '90px', background: '#059669', color: 'white', borderRight: 'none' }}>Net Stock</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, idx) => {
-              const qty = isRMG ? (Number(item.totalPieces) || 0) : (Number(item.totalMeter) || 0);
-              const rate = isJobWork ? 0 : (Number(item.itemRate) || 0);
-              const gst = isJobWork ? 0 : (Number(item.gstPercentage) || 0);
-              const baseVal = qty * rate;
-              const totalVal = baseVal + (baseVal * gst / 100);
-              const netStock = qty - (Number(item.damage) || 0) - (Number(item.shortage) || 0) - (Number(item.returnEntry) || 0);
-              return (
-                <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', background: idx % 2 === 0 ? '#f8fafc' : 'white' }}>
-                  <td style={styles.td}><input type="text" value={item.itemDetails} onChange={(e) => handleItemChange(idx, 'itemDetails', e.target.value)} style={styles.tblInput} /></td>
-                  {!isRMG && <td style={styles.td}><input type="text" value={item.quality} onChange={(e) => handleItemChange(idx, 'quality', e.target.value)} style={styles.tblInput} /></td>}
-                  {!isRMG && <td style={styles.td}><input type="text" value={item.width} onChange={(e) => handleItemChange(idx, 'width', e.target.value)} style={styles.tblInput} /></td>}
-                  {!isRMG && <td style={styles.td}><input type="text" value={item.meterFold} onChange={(e) => handleItemChange(idx, 'meterFold', e.target.value)} style={styles.tblInput} /></td>}
-                  {isRMG && <td style={styles.td}><input type="text" value={item.sizeDetails} onChange={(e) => handleItemChange(idx, 'sizeDetails', e.target.value)} style={styles.tblInput} /></td>}
-                  <td style={styles.td}><input type="text" value={item.designNo} onChange={(e) => handleItemChange(idx, 'designNo', e.target.value)} style={styles.tblInput} /></td>
-                  <td style={styles.td}><input type="text" value={item.color} onChange={(e) => handleItemChange(idx, 'color', e.target.value)} style={styles.tblInput} /></td>
-                  <td style={styles.td}>
-                    <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                      <input type="file" accept="image/*" onChange={(e) => handleFileChange(idx, e.target.files ? e.target.files[0] : null)} style={{ width: '100px', fontSize: '10px' }} />
-                      {item.imageFile && <button type="button" onClick={() => setSelectedImageModal(URL.createObjectURL(item.imageFile))} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Preview</button>}
-                    </div>
-                  </td>
-                  {!isJobWork && <td style={styles.td}><input type="number" value={item.itemRate} onChange={(e) => handleItemChange(idx, 'itemRate', e.target.value)} style={styles.tblInput} /></td>}
-                  {!isJobWork && <td style={styles.td}>
-                    <select value={item.gstPercentage} onChange={(e) => handleItemChange(idx, 'gstPercentage', e.target.value)} style={styles.tblInput}>
-                      <option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option>
-                    </select>
-                  </td>}
-                  {!isRMG && <td style={styles.td}><input type="number" value={item.totalMeter} onChange={(e) => handleItemChange(idx, 'totalMeter', e.target.value)} style={{ ...styles.tblInput, border: '1px solid #3b82f6', background: '#eff6ff' }} /></td>}
-                  {isRMG && <td style={styles.td}><input type="number" value={item.totalPieces} onChange={(e) => handleItemChange(idx, 'totalPieces', e.target.value)} style={{ ...styles.tblInput, border: '1px solid #3b82f6', background: '#eff6ff' }} /></td>}
-                  {!isJobWork && <td style={styles.td}><strong style={{ color: '#334155' }}>₹ {totalVal.toFixed(2)}</strong></td>}
-                  <td style={styles.td}><input type="number" value={item.damage} onChange={(e) => handleItemChange(idx, 'damage', e.target.value)} style={styles.tblInput} /></td>
-                  <td style={styles.td}><input type="number" value={item.shortage} onChange={(e) => handleItemChange(idx, 'shortage', e.target.value)} style={styles.tblInput} /></td>
-                  <td style={styles.td}><input type="number" value={item.returnEntry} placeholder="Qty" onChange={(e) => handleItemChange(idx, 'returnEntry', e.target.value)} style={styles.tblInput} /></td>
-                  <td style={{ ...styles.td, background: '#f0fdf4', textAlign: 'center', borderRight: 'none' }}><strong style={{ color: netStock > 0 ? '#059669' : '#ef4444', fontSize: '15px' }}>{netStock.toFixed(2)}</strong></td>
+          <h4 style={{ color: '#0f172a', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' }}>A) Supplier & Logistics Details</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+            <div>
+              <label style={styles.label}>{isJobWork ? 'Client / Supplier Name' : 'Supplier Name'}</label>
+              <select value={bill.isNewSupplier ? 'NEW' : suppliers.find(s => s.name === bill.supplierName)?.id || ''} onChange={handleSupplierSelect} style={styles.input}>
+                <option value="">-- Select Existing --</option>
+                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <option value="NEW" style={{ fontWeight: 'bold', color: '#2563eb' }}>+ Add New Party</option>
+              </select>
+              {bill.isNewSupplier && <input type="text" name="supplierName" placeholder="Enter New Party Name" value={bill.supplierName} onChange={handleBillChange} style={{ ...styles.input, marginTop: '10px', borderColor: '#2563eb' }} />}
+            </div>
+            <div><label style={styles.label}>Address</label><input type="text" name="supplierAddress" value={bill.supplierAddress} onChange={handleBillChange} disabled={!bill.isNewSupplier && bill.supplierName !== ''} style={styles.input} /></div>
+            <div><label style={styles.label}>GST Number</label><input type="text" name="supplierGst" value={bill.supplierGst} onChange={handleBillChange} disabled={!bill.isNewSupplier && bill.supplierName !== ''} style={styles.input} /></div>
+            <div><label style={styles.label}>{isJobWork ? 'Challan No.' : 'Bill No.'}</label><input type="text" name="billNo" value={bill.billNo} onChange={handleBillChange} style={styles.input} /></div>
+            <div><label style={styles.label}>{isJobWork ? 'Challan Date' : 'Bill Date'}</label><input type="date" name="billDate" value={bill.billDate} onChange={handleBillChange} style={styles.input} /></div>
+            <div><label style={styles.label}>No. of Bales</label><input type="number" name="noOfBales" value={bill.noOfBales} onChange={handleBillChange} style={styles.input} /></div>
+            <div><label style={styles.label}>LR No.</label><input type="text" name="lrNo" value={bill.lrNo} onChange={handleBillChange} style={styles.input} /></div>
+            <div><label style={styles.label}>LR Date</label><input type="date" name="lrDate" value={bill.lrDate} onChange={handleBillChange} style={styles.input} /></div>
+            <div><label style={styles.label}>Bale No(s).</label><input type="text" name="baleNo" value={bill.baleNo} placeholder="Ex: B-101" onChange={handleBillChange} style={styles.input} /></div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9', flexWrap: 'wrap', gap: '10px' }}>
+            <h4 style={{ color: '#0f172a', margin: 0 }}>B) Color-Wise Inventory Breakdown</h4>
+            <button type="button" onClick={handleAddColorVariant} style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
+              🎨 + Add Color Row (Same Design & Rate)
+            </button>
+          </div>
+
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: '20px', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
+            <table style={{ width: '100%', minWidth: '1350px', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
+              <thead>
+                <tr style={{ background: '#0f172a', color: 'white', textAlign: 'center' }}>
+                  <th colSpan={isRMG ? 2 : 4} style={styles.thGroup}>Fabric Specifications</th>
+                  <th colSpan={3} style={styles.thGroup}>Design & Color Variant</th>
+                  <th colSpan={isJobWork ? 1 : 4} style={styles.thGroup}>{isJobWork ? 'Quantity' : 'Pricing & GST (₹)'}</th>
+                  <th colSpan={3} style={styles.thGroup}>Deductions</th>
+                  <th style={{ ...styles.thGroup, background: '#059669', borderRight: 'none' }}>Final</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                <tr style={{ background: '#1e293b', color: '#e2e8f0' }}>
+                  <th style={{ ...styles.thSub, width: '120px' }}>Item Details</th>
+                  {!isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Quality</th>}
+                  {!isRMG && <th style={{ ...styles.thSub, width: '70px' }}>Width</th>}
+                  {!isRMG && <th style={{ ...styles.thSub, width: '70px' }}>Fold</th>}
+                  {isRMG && <th style={{ ...styles.thSub, width: '90px', color: '#38bdf8' }}>Size</th>}
+                  <th style={{ ...styles.thSub, width: '90px' }}>Design No</th>
+                  <th style={{ ...styles.thSub, width: '100px', color: '#fbbf24' }}>Color</th>
+                  <th style={{ ...styles.thSub, width: '150px' }}>Image Upload / View</th>
+                  {!isJobWork && <th style={{ ...styles.thSub, width: '80px', color: '#fbbf24' }}>Rate</th>}
+                  {!isJobWork && <th style={{ ...styles.thSub, width: '70px', color: '#38bdf8' }}>GST %</th>}
+                  {!isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Total Mtr</th>}
+                  {isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Total Pcs</th>}
+                  {!isJobWork && <th style={{ ...styles.thSub, width: '100px' }}>Total Val</th>}
+                  <th style={{ ...styles.thSub, width: '70px' }}>Dmg</th>
+                  <th style={{ ...styles.thSub, width: '70px' }}>Short</th>
+                  <th style={{ ...styles.thSub, width: '110px' }}>Return</th>
+                  <th style={{ ...styles.thSub, width: '90px', background: '#059669', color: 'white', borderRight: 'none' }}>Net Stock</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, idx) => {
+                  const qty = isRMG ? (Number(item.totalPieces) || 0) : (Number(item.totalMeter) || 0);
+                  const rate = isJobWork ? 0 : (Number(item.itemRate) || 0);
+                  const gst = isJobWork ? 0 : (Number(item.gstPercentage) || 0);
+                  const baseVal = qty * rate;
+                  const totalVal = baseVal + (baseVal * gst / 100);
+                  const netStock = qty - (Number(item.damage) || 0) - (Number(item.shortage) || 0) - (Number(item.returnEntry) || 0);
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', background: idx % 2 === 0 ? '#f8fafc' : 'white' }}>
+                      <td style={styles.td}><input type="text" value={item.itemDetails} onChange={(e) => handleItemChange(idx, 'itemDetails', e.target.value)} style={styles.tblInput} /></td>
+                      {!isRMG && <td style={styles.td}><input type="text" value={item.quality} onChange={(e) => handleItemChange(idx, 'quality', e.target.value)} style={styles.tblInput} /></td>}
+                      {!isRMG && <td style={styles.td}><input type="text" value={item.width} onChange={(e) => handleItemChange(idx, 'width', e.target.value)} style={styles.tblInput} /></td>}
+                      {!isRMG && <td style={styles.td}><input type="text" value={item.meterFold} onChange={(e) => handleItemChange(idx, 'meterFold', e.target.value)} style={styles.tblInput} /></td>}
+                      {isRMG && <td style={styles.td}><input type="text" value={item.sizeDetails} onChange={(e) => handleItemChange(idx, 'sizeDetails', e.target.value)} style={styles.tblInput} /></td>}
+                      <td style={styles.td}><input type="text" value={item.designNo} onChange={(e) => handleItemChange(idx, 'designNo', e.target.value)} style={styles.tblInput} /></td>
+                      <td style={styles.td}><input type="text" placeholder="Color" value={item.color} onChange={(e) => handleItemChange(idx, 'color', e.target.value)} style={{ ...styles.tblInput, borderColor: '#f59e0b', background: '#fffbeb' }} /></td>
+                      <td style={styles.td}>
+                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                          <input type="file" accept="image/*" onChange={(e) => handleFileChange(idx, e.target.files ? e.target.files[0] : null)} style={{ width: '100px', fontSize: '10px' }} />
+                          {item.imageFile && <button type="button" onClick={() => setSelectedImageModal(URL.createObjectURL(item.imageFile))} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Preview</button>}
+                        </div>
+                      </td>
+                      {!isJobWork && <td style={styles.td}><input type="number" value={item.itemRate} onChange={(e) => handleItemChange(idx, 'itemRate', e.target.value)} style={styles.tblInput} /></td>}
+                      {!isJobWork && <td style={styles.td}>
+                        <select value={item.gstPercentage} onChange={(e) => handleItemChange(idx, 'gstPercentage', e.target.value)} style={styles.tblInput}>
+                          <option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option>
+                        </select>
+                      </td>}
+                      {!isRMG && <td style={styles.td}><input type="number" value={item.totalMeter} onChange={(e) => handleItemChange(idx, 'totalMeter', e.target.value)} style={{ ...styles.tblInput, border: '1px solid #3b82f6', background: '#eff6ff' }} /></td>}
+                      {isRMG && <td style={styles.td}><input type="number" value={item.totalPieces} onChange={(e) => handleItemChange(idx, 'totalPieces', e.target.value)} style={{ ...styles.tblInput, border: '1px solid #3b82f6', background: '#eff6ff' }} /></td>}
+                      {!isJobWork && <td style={styles.td}><strong style={{ color: '#334155' }}>₹ {totalVal.toFixed(2)}</strong></td>}
+                      <td style={styles.td}><input type="number" value={item.damage} onChange={(e) => handleItemChange(idx, 'damage', e.target.value)} style={styles.tblInput} /></td>
+                      <td style={styles.td}><input type="number" value={item.shortage} onChange={(e) => handleItemChange(idx, 'shortage', e.target.value)} style={styles.tblInput} /></td>
+                      <td style={styles.td}><input type="number" value={item.returnEntry} placeholder="Qty" onChange={(e) => handleItemChange(idx, 'returnEntry', e.target.value)} style={styles.tblInput} /></td>
+                      <td style={{ ...styles.td, background: '#f0fdf4', textAlign: 'center', borderRight: 'none' }}><strong style={{ color: netStock > 0 ? '#059669' : '#ef4444', fontSize: '15px' }}>{netStock.toFixed(2)}</strong></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '12px' }}>
-        <button type="button" onClick={handleAddItem} style={styles.secondaryBtn}>+ Add Row</button>
-        {!isJobWork && <div style={{ fontSize: '16px', color: '#0f172a' }}>Grand Total (with GST): <strong style={{ color: '#dc2626' }}>₹ {grandTotal.toFixed(2)}</strong></div>}
-        <button type="button" onClick={handleSaveGRN} disabled={saving} style={styles.successBtn}>{saving ? 'Saving...' : '💾 Save & Update Stock'}</button>
-      </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button type="button" onClick={handleAddItem} style={styles.secondaryBtn}>+ Add New Item Row</button>
+              <button type="button" onClick={handleAddColorVariant} style={styles.secondaryBtn}>🎨 + Add Color Row</button>
+            </div>
+            {!isJobWork && <div style={{ fontSize: '16px', color: '#0f172a' }}>Grand Total (with GST): <strong style={{ color: '#dc2626' }}>₹ {grandTotal.toFixed(2)}</strong></div>}
+            <button type="button" onClick={handleSaveGRN} disabled={saving} style={styles.successBtn}>{saving ? 'Saving...' : '💾 Save & Update Stock'}</button>
+          </div>
+        </div>
+      )}
 
       {selectedImageModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' }}>
@@ -875,25 +1039,16 @@ function CuttingEntryModule() {
   );
 }
 
-// 5. Production WIP Tracking
+// 5. Production WIP Tracking (Supports Full or Partial Piece Movement)
 function ProductionTracking() {
   const [wipBatches, setWipBatches] = useState<any[]>([]);
+  const [moveQtyMap, setMoveQtyMap] = useState<Record<number, string>>({});
+
   useEffect(() => { fetchWIP(); }, []);
 
   const fetchWIP = async () => {
     const { data } = await supabase.from('pommys_production_wip').select('*').neq('current_status', 'Ready Stock').order('id', { ascending: false });
     if (data) setWipBatches(data);
-  };
-
-  const updateStatus = async (batch: any, newStatus: string) => {
-    await supabase.from('pommys_production_wip').update({ current_status: newStatus }).eq('id', batch.id);
-    if (newStatus === 'Ready Stock') {
-      await supabase.from('pommys_ready_stock').insert([{
-        batch_code: batch.batch_code, model_name: batch.model_name, ready_pieces: batch.total_pieces
-      }]);
-      alert(`🎉 Batch ${batch.batch_code} moved to Ready Stock!`);
-    }
-    fetchWIP();
   };
 
   const getNextStatus = (current: string) => {
@@ -904,35 +1059,94 @@ function ProductionTracking() {
     return null;
   };
 
+  const handleMoveBatch = async (batch: any, newStatus: string) => {
+    const totalPcs = Number(batch.total_pieces) || 0;
+    const rawInput = moveQtyMap[batch.id];
+    const pcsToMove = rawInput !== undefined && rawInput !== '' ? Number(rawInput) : totalPcs;
+
+    if (!pcsToMove || pcsToMove <= 0 || pcsToMove > totalPcs) {
+      alert(`Enter valid piece count between 1 and ${totalPcs}.`);
+      return;
+    }
+
+    if (pcsToMove < totalPcs) {
+      // Partial batch move: keep remaining pieces in current WIP stage, send moved pieces to next stage
+      const remaining = totalPcs - pcsToMove;
+      await supabase.from('pommys_production_wip').update({ total_pieces: remaining }).eq('id', batch.id);
+      if (newStatus === 'Ready Stock') {
+        await supabase.from('pommys_ready_stock').insert([{
+          batch_code: `${batch.batch_code}-P`,
+          model_name: batch.model_name,
+          ready_pieces: pcsToMove
+        }]);
+      } else {
+        await supabase.from('pommys_production_wip').insert([{
+          batch_code: `${batch.batch_code}-P`,
+          model_name: batch.model_name,
+          total_pieces: pcsToMove,
+          current_status: newStatus
+        }]);
+      }
+      alert(`✅ ${pcsToMove} pcs moved to ${newStatus}; ${remaining} pcs remain in ${batch.current_status}.`);
+    } else {
+      // Full batch move
+      await supabase.from('pommys_production_wip').update({ current_status: newStatus }).eq('id', batch.id);
+      if (newStatus === 'Ready Stock') {
+        await supabase.from('pommys_ready_stock').insert([{
+          batch_code: batch.batch_code,
+          model_name: batch.model_name,
+          ready_pieces: totalPcs
+        }]);
+        alert(`🎉 Batch ${batch.batch_code} (${totalPcs} pcs) moved to Ready Stock!`);
+      }
+    }
+
+    setMoveQtyMap(prev => ({ ...prev, [batch.id]: '' }));
+    fetchWIP();
+  };
+
   return (
     <div style={styles.card}>
-      <h3 style={{ margin: '0 0 16px 0', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', fontSize: '17px' }}>🏭 Live Production Tracking (WIP)</h3>
+      <h3 style={{ margin: '0 0 10px 0', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', fontSize: '17px' }}>🏭 Live Production Tracking (Full & Partial WIP)</h3>
+      <p style={{ fontSize: '12px', color: '#64748b', marginTop: 0 }}>
+        முழு பீஸ்களையும் நகர்த்த Move Qty காலியாக விடலாம்; பகுதி பீஸ்களை மட்டும் நகர்த்த எண்ணிக்கையை உள்ளிடலாம்.
+      </p>
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <table style={{ width: '100%', minWidth: '560px', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
+        <table style={{ width: '100%', minWidth: '640px', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
           <thead>
             <tr style={{ background: '#1e293b', color: 'white' }}>
               <th style={styles.thSub}>Batch Code</th>
               <th style={styles.thSub}>Model</th>
               <th style={styles.thSub}>Total Pcs</th>
               <th style={styles.thSub}>Current Status</th>
-              <th style={styles.thSub}>Action (Move to Next)</th>
+              <th style={styles.thSub}>Partial Pcs</th>
+              <th style={styles.thSub}>Action</th>
             </tr>
           </thead>
           <tbody>
             {wipBatches.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No Active Batches in WIP</td></tr>
+              <tr><td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No Active Batches in WIP</td></tr>
             ) : wipBatches.map((batch, idx) => {
               const nextStat = getNextStatus(batch.current_status);
               return (
                 <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                   <td style={styles.td}><strong>{batch.batch_code}</strong></td>
                   <td style={styles.td}>{batch.model_name}</td>
-                  <td style={styles.td}>{batch.total_pieces}</td>
+                  <td style={styles.td}><strong>{batch.total_pieces}</strong></td>
                   <td style={styles.td}>
                     <span style={{ background: '#fef3c7', color: '#b45309', padding: '5px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{batch.current_status}</span>
                   </td>
                   <td style={styles.td}>
-                    {nextStat && <button type="button" onClick={() => updateStatus(batch, nextStat)} style={{ ...styles.primaryBtn, padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}>Move to {nextStat} ➡️</button>}
+                    <input
+                      type="number"
+                      placeholder={`Max ${batch.total_pieces}`}
+                      value={moveQtyMap[batch.id] || ''}
+                      onChange={(e) => setMoveQtyMap(prev => ({ ...prev, [batch.id]: e.target.value }))}
+                      style={{ ...styles.tblInput, width: '95px' }}
+                    />
+                  </td>
+                  <td style={styles.td}>
+                    {nextStat && <button type="button" onClick={() => handleMoveBatch(batch, nextStat)} style={{ ...styles.primaryBtn, padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}>Move to {nextStat} ➡️</button>}
                   </td>
                 </tr>
               );
@@ -944,21 +1158,37 @@ function ProductionTracking() {
   );
 }
 
-// 6. Store Room & Trims Module
+// 6. Store Room & Trims Module (Persisted in Supabase with fallback)
 function StoreRoomModule() {
-  const [trims, setTrims] = useState([
-    { id: 1, name: 'Lace Border (White/Color)', unit: 'Roll / Mtr', qty: 120, reorder: 30 },
-    { id: 2, name: 'Elastic Band (1 inch)', unit: 'Roll', qty: 45, reorder: 15 },
-    { id: 3, name: 'Poly Bag & Tag Set', unit: 'Packet', qty: 200, reorder: 50 }
-  ]);
+  const [trims, setTrims] = useState<any[]>([]);
   const [itemName, setItemName] = useState('');
   const [unit, setUnit] = useState('Mtr');
   const [qty, setQty] = useState('');
 
-  const addTrim = (e: FormEvent) => {
+  const loadTrims = async () => {
+    const { data, error } = await supabase.from('pommys_store_trims').select('*').order('id', { ascending: false });
+    if (!error && data) {
+      setTrims(data);
+    } else {
+      setTrims([
+        { id: 1, item_name: 'Lace Border (White/Color)', unit: 'Mtr', qty: 120, reorder_level: 30 },
+        { id: 2, item_name: 'Elastic Band (1 inch)', unit: 'Roll', qty: 45, reorder_level: 15 }
+      ]);
+    }
+  };
+
+  useEffect(() => { loadTrims(); }, []);
+
+  const addTrim = async (e: FormEvent) => {
     e.preventDefault();
-    if (!itemName || !qty) return;
-    setTrims([{ id: Date.now(), name: itemName, unit, qty: Number(qty), reorder: 20 }, ...trims]);
+    if (!itemName.trim() || !qty) return;
+    const payload = { item_name: itemName.trim(), unit, qty: Number(qty), reorder_level: 20 };
+    const { error } = await supabase.from('pommys_store_trims').insert([payload]);
+    if (error) {
+      setTrims([{ id: Date.now(), ...payload }, ...trims]);
+    } else {
+      await loadTrims();
+    }
     setItemName('');
     setQty('');
   };
@@ -985,10 +1215,10 @@ function StoreRoomModule() {
           <tbody>
             {trims.map(t => (
               <tr key={t.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={styles.td}><strong>{t.name}</strong></td>
+                <td style={styles.td}><strong>{t.item_name}</strong></td>
                 <td style={styles.td}>{t.unit}</td>
                 <td style={styles.td}>{t.qty}</td>
-                <td style={styles.td}>{t.qty <= t.reorder ? '⚠️ Low Stock' : '✅ Sufficient'}</td>
+                <td style={styles.td}>{Number(t.qty) <= Number(t.reorder_level || 20) ? '⚠️ Low Stock' : '✅ Sufficient'}</td>
               </tr>
             ))}
           </tbody>
@@ -998,22 +1228,105 @@ function StoreRoomModule() {
   );
 }
 
-// 7. Ready Stock Godown Module (With Delete Button for Admin)
-function ReadyStockModule({ canDelete }: { canDelete: boolean }) {
+// 7. Ready Stock Godown + Retail Showroom Stock Transfer & Branch-Wise Bifurcation
+function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
   const [readyList, setReadyList] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
+  const [showrooms, setShowrooms] = useState<string[]>(INITIAL_SHOWROOMS);
+  const [newShowroomName, setNewShowroomName] = useState('');
+
+  const [selectedStockId, setSelectedStockId] = useState('');
+  const [targetShowroom, setTargetShowroom] = useState(INITIAL_SHOWROOMS[0]);
+  const [challanNo, setChallanNo] = useState('');
+  const [transferDate, setTransferDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [transferQty, setTransferQty] = useState('');
+  const [sizeNote, setSizeNote] = useState('');
+  const [transferring, setTransferring] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const loadReady = async () => {
-    const { data } = await supabase.from('pommys_ready_stock').select('*').order('id', { ascending: false });
-    if (data) setReadyList(data);
+  const loadAll = async () => {
+    const { data: ready } = await supabase.from('pommys_ready_stock').select('*').order('id', { ascending: false });
+    if (ready) setReadyList(ready.filter((r: any) => Number(r.ready_pieces) > 0));
+
+    const { data: trf, error: trfErr } = await supabase.from('pommys_showroom_transfers').select('*').order('id', { ascending: false });
+    if (!trfErr && trf) {
+      setTransfers(trf);
+      const customBranches = Array.from(new Set(trf.map((x: any) => x.showroom_name).filter(Boolean)));
+      setShowrooms(prev => Array.from(new Set([...prev, ...customBranches])));
+    }
   };
 
   useEffect(() => {
-    loadReady();
+    loadAll();
   }, []);
 
+  const handleAddShowroom = () => {
+    const trimmed = newShowroomName.trim();
+    if (!trimmed) return;
+    if (!showrooms.includes(trimmed)) {
+      setShowrooms(prev => [...prev, trimmed]);
+    }
+    setTargetShowroom(trimmed);
+    setNewShowroomName('');
+  };
+
+  const handleTransferToShowroom = async (e: FormEvent) => {
+    e.preventDefault();
+    const stockRow = readyList.find(r => String(r.id) === String(selectedStockId));
+    const pcsToSend = Number(transferQty);
+
+    if (!stockRow) {
+      alert('Please select a Ready Stock batch from Godown.');
+      return;
+    }
+    const availablePcs = Number(stockRow.ready_pieces) || 0;
+    if (!pcsToSend || pcsToSend <= 0 || pcsToSend > availablePcs) {
+      alert(`Enter valid transfer pieces (Available in Godown: ${availablePcs}).`);
+      return;
+    }
+
+    setTransferring(true);
+    try {
+      const generatedChallan = challanNo.trim() || `TRF-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      // 1. Insert transfer record for Showroom bifurcation
+      const { error: insErr } = await supabase.from('pommys_showroom_transfers').insert([{
+        challan_no: generatedChallan,
+        transfer_date: transferDate || new Date().toISOString().slice(0, 10),
+        showroom_name: targetShowroom,
+        batch_code: stockRow.batch_code,
+        design_no: stockRow.design_no || '-',
+        color: stockRow.color || '-',
+        model_name: stockRow.model_name || '-',
+        size_details: sizeNote.trim() || 'Assorted',
+        transferred_pieces: pcsToSend,
+        status: 'Transferred to Showroom'
+      }]);
+      if (insErr) throw insErr;
+
+      // 2. Deduct transferred pieces from Central Ready Stock Godown
+      const remainingGodownPcs = Math.max(0, availablePcs - pcsToSend);
+      const { error: updErr } = await supabase
+        .from('pommys_ready_stock')
+        .update({ ready_pieces: remainingGodownPcs })
+        .eq('id', stockRow.id);
+      if (updErr) throw updErr;
+
+      alert(`✅ ${pcsToSend} pcs transferred to ${targetShowroom} Showroom (Challan: ${generatedChallan})!`);
+      setTransferQty('');
+      setChallanNo('');
+      setSizeNote('');
+      setSelectedStockId('');
+      await loadAll();
+    } catch (err: any) {
+      alert('Transfer failed: ' + (err?.message || String(err)));
+    } finally {
+      setTransferring(false);
+    }
+  };
+
   const handleDeleteReady = async (row: any) => {
-    const confirmed = window.confirm(`Are you sure you want to delete batch "${row.batch_code}" (${row.ready_pieces} pcs)?`);
+    const confirmed = window.confirm(`Delete batch "${row.batch_code}" (${row.ready_pieces} pcs) from Ready Stock?`);
     if (!confirmed) return;
 
     setDeletingId(row.id);
@@ -1029,52 +1342,196 @@ function ReadyStockModule({ canDelete }: { canDelete: boolean }) {
     }
   };
 
+  const totalGodownPcs = readyList.reduce((sum, r) => sum + (Number(r.ready_pieces) || 0), 0);
+  const totalShowroomPcs = transfers.reduce((sum, t) => sum + (Number(t.transferred_pieces) || 0), 0);
+
+  // Bifurcate stock by Showroom
+  const showroomTotals = showrooms.map(branch => {
+    const branchRows = transfers.filter(t => t.showroom_name === branch);
+    const totalPcs = branchRows.reduce((s, r) => s + (Number(r.transferred_pieces) || 0), 0);
+    return { branch, totalPcs, challanCount: branchRows.length };
+  });
+
   return (
-    <div style={styles.card}>
-      <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>👕 Finished Ready Stock Godown</h4>
-      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-        <table style={{ width: '100%', minWidth: '460px', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ background: '#0f172a', color: 'white' }}>
-              <th style={styles.thSub}>Batch Code</th>
-              <th style={styles.thSub}>Model</th>
-              <th style={styles.thSub}>Ready Pieces</th>
-              {canDelete && <th style={{ ...styles.thSub, width: '120px', textAlign: 'center' }}>Action</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {readyList.length === 0 ? (
-              <tr><td colSpan={canDelete ? 4 : 3} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No Ready Stock records found yet.</td></tr>
-            ) : readyList.map((r, idx) => (
-              <tr key={r.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={styles.td}><strong>{r.batch_code}</strong></td>
-                <td style={styles.td}>{r.model_name}</td>
-                <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}</td>
-                {canDelete && (
-                  <td style={{ ...styles.td, textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteReady(r)}
-                      disabled={deletingId === r.id}
-                      style={{
-                        background: '#fee2e2',
-                        color: '#dc2626',
-                        border: '1px solid #fca5a5',
-                        padding: '5px 12px',
-                        borderRadius: '6px',
-                        cursor: deletingId === r.id ? 'not-allowed' : 'pointer',
-                        fontWeight: 'bold',
-                        fontSize: '12px'
-                      }}
-                    >
-                      {deletingId === r.id ? 'Deleting...' : '🗑️ Delete'}
-                    </button>
-                  </td>
-                )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Top Stock Bifurcation Summary Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+        <div style={{ ...styles.card, borderTop: '4px solid #059669' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>CENTRAL GODOWN READY STOCK</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#059669', marginTop: '4px' }}>{totalGodownPcs} Pcs</div>
+        </div>
+        <div style={{ ...styles.card, borderTop: '4px solid #2563eb' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>TOTAL RETAIL SHOWROOM STOCK</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2563eb', marginTop: '4px' }}>{totalShowroomPcs} Pcs</div>
+        </div>
+        <div style={{ ...styles.card, borderTop: '4px solid #7c3aed' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>OVERALL FINISHED STOCK</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a', marginTop: '4px' }}>{totalGodownPcs + totalShowroomPcs} Pcs</div>
+        </div>
+      </div>
+
+      {/* Showroom Stock Transfer Form */}
+      <div style={styles.card}>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🚚 Transfer Ready Goods to Retail Showroom</h4>
+        <form onSubmit={handleTransferToShowroom} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
+          <div>
+            <label style={styles.label}>Select Ready Stock Batch</label>
+            <select value={selectedStockId} onChange={(e) => setSelectedStockId(e.target.value)} style={styles.input} required>
+              <option value="">-- Choose Batch --</option>
+              {readyList.map(r => (
+                <option key={r.id} value={r.id}>
+                  {r.batch_code} | {r.model_name} ({r.color || 'Assorted'}) — {r.ready_pieces} Pcs
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={styles.label}>Target Retail Showroom</label>
+            <select value={targetShowroom} onChange={(e) => setTargetShowroom(e.target.value)} style={styles.input}>
+              {showrooms.map(sr => <option key={sr} value={sr}>{sr}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={styles.label}>Transfer Pieces</label>
+            <input type="number" placeholder="Pieces to Send" value={transferQty} onChange={(e) => setTransferQty(e.target.value)} style={styles.input} required />
+          </div>
+          <div>
+            <label style={styles.label}>Size / Color Note</label>
+            <input type="text" placeholder="Ex: L, XL / Maroon" value={sizeNote} onChange={(e) => setSizeNote(e.target.value)} style={styles.input} />
+          </div>
+          <div>
+            <label style={styles.label}>Challan No.</label>
+            <input type="text" placeholder="Auto if blank" value={challanNo} onChange={(e) => setChallanNo(e.target.value)} style={styles.input} />
+          </div>
+          <div>
+            <label style={styles.label}>Transfer Date</label>
+            <input type="date" value={transferDate} onChange={(e) => setTransferDate(e.target.value)} style={styles.input} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button type="submit" disabled={transferring} style={{ ...styles.primaryBtn, width: '100%' }}>
+              {transferring ? 'Transferring...' : '🚚 Transfer Stock'}
+            </button>
+          </div>
+        </form>
+
+        <div style={{ display: 'flex', gap: '8px', marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed #cbd5e1', flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="New Showroom / Branch Name"
+            value={newShowroomName}
+            onChange={(e) => setNewShowroomName(e.target.value)}
+            style={{ ...styles.tblInput, maxWidth: '220px' }}
+          />
+          <button type="button" onClick={handleAddShowroom} style={{ ...styles.secondaryBtn, padding: '7px 12px', fontSize: '12px' }}>
+            + Add Showroom Branch
+          </button>
+        </div>
+      </div>
+
+      {/* Branch-Wise Showroom Stock Bifurcation Grid */}
+      <div style={styles.card}>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🏬 Showroom-Wise Stock Bifurcation (Branch Stock)</h4>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: '10px' }}>
+          {showroomTotals.map(item => (
+            <div
+              key={item.branch}
+              style={{
+                border: '1px solid #cbd5e1',
+                borderRadius: '10px',
+                padding: '12px',
+                background: item.totalPcs > 0 ? '#f0f9ff' : '#f8fafc'
+              }}
+            >
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#0f172a' }}>{item.branch}</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0369a1', marginTop: '6px' }}>{item.totalPcs} Pcs</div>
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>{item.challanCount} Challan(s)</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Central Godown Ready Stock Table */}
+      <div style={styles.card}>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>👕 Central Godown Ready Stock</h4>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: '520px', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ background: '#0f172a', color: 'white' }}>
+                <th style={styles.thSub}>Batch Code</th>
+                <th style={styles.thSub}>Model</th>
+                <th style={styles.thSub}>Color</th>
+                <th style={styles.thSub}>Godown Pcs</th>
+                {canDelete && <th style={{ ...styles.thSub, width: '110px', textAlign: 'center' }}>Action</th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {readyList.length === 0 ? (
+                <tr><td colSpan={canDelete ? 5 : 4} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No Ready Stock in Central Godown.</td></tr>
+              ) : readyList.map((r, idx) => (
+                <tr key={r.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={styles.td}><strong>{r.batch_code}</strong></td>
+                  <td style={styles.td}>{r.model_name}</td>
+                  <td style={styles.td}>{r.color || 'Assorted'}</td>
+                  <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}</td>
+                  {canDelete && (
+                    <td style={{ ...styles.td, textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteReady(r)}
+                        disabled={deletingId === r.id}
+                        style={{
+                          background: '#fee2e2',
+                          color: '#dc2626',
+                          border: '1px solid #fca5a5',
+                          padding: '5px 10px',
+                          borderRadius: '6px',
+                          cursor: deletingId === r.id ? 'not-allowed' : 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '12px'
+                        }}
+                      >
+                        {deletingId === r.id ? '...' : '🗑️ Delete'}
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Showroom Transfer Challan Log */}
+      <div style={styles.card}>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>📄 Showroom Transfer Challan Register</h4>
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: '640px', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ background: '#1e293b', color: 'white' }}>
+                <th style={styles.thSub}>Challan No</th>
+                <th style={styles.thSub}>Date</th>
+                <th style={styles.thSub}>Showroom</th>
+                <th style={styles.thSub}>Batch / Model</th>
+                <th style={styles.thSub}>Size / Color</th>
+                <th style={styles.thSub}>Sent Pcs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transfers.length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No showroom stock transfers recorded yet.</td></tr>
+              ) : transfers.map((t, idx) => (
+                <tr key={t.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={styles.td}><strong>{t.challan_no}</strong></td>
+                  <td style={styles.td}>{t.transfer_date || '-'}</td>
+                  <td style={{ ...styles.td, fontWeight: 'bold', color: '#0369a1' }}>{t.showroom_name}</td>
+                  <td style={styles.td}>{t.batch_code} — {t.model_name}</td>
+                  <td style={styles.td}>{t.size_details || '-'} ({t.color || '-'})</td>
+                  <td style={{ ...styles.td, fontWeight: 'bold', color: '#059669' }}>{t.transferred_pieces}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -1143,20 +1600,43 @@ function CostingRateFixerModule() {
   );
 }
 
-// 10. Tailor Ledger & Jobwork Module
+// 10. Tailor Ledger & Jobwork Module (Persisted in Supabase with fallback)
 function TailorLedgerModule() {
-  const [entries, setEntries] = useState([
-    { id: 1, tailor: 'Murugan Stitching Unit', batch: 'CUT-2026-101', pcs: 120, rate: 50, status: 'In Stitching' }
-  ]);
+  const [entries, setEntries] = useState<any[]>([]);
   const [tailor, setTailor] = useState('');
   const [batch, setBatch] = useState('');
   const [pcs, setPcs] = useState('');
   const [rate, setRate] = useState('50');
 
-  const addEntry = (e: FormEvent) => {
+  const loadLedger = async () => {
+    const { data, error } = await supabase.from('pommys_tailor_ledger').select('*').order('id', { ascending: false });
+    if (!error && data) {
+      setEntries(data);
+    } else {
+      setEntries([
+        { id: 1, tailor_name: 'Murugan Stitching Unit', batch_code: 'CUT-2026-101', pieces: 120, rate_per_pc: 50, status: 'In Stitching' }
+      ]);
+    }
+  };
+
+  useEffect(() => { loadLedger(); }, []);
+
+  const addEntry = async (e: FormEvent) => {
     e.preventDefault();
-    if (!tailor || !batch || !pcs) return;
-    setEntries([{ id: Date.now(), tailor, batch, pcs: Number(pcs), rate: Number(rate) || 0, status: 'Issued' }, ...entries]);
+    if (!tailor.trim() || !batch.trim() || !pcs) return;
+    const payload = {
+      tailor_name: tailor.trim(),
+      batch_code: batch.trim(),
+      pieces: Number(pcs),
+      rate_per_pc: Number(rate) || 0,
+      status: 'Issued'
+    };
+    const { error } = await supabase.from('pommys_tailor_ledger').insert([payload]);
+    if (error) {
+      setEntries([{ id: Date.now(), ...payload }, ...entries]);
+    } else {
+      await loadLedger();
+    }
     setTailor('');
     setBatch('');
     setPcs('');
@@ -1180,10 +1660,10 @@ function TailorLedgerModule() {
           <tbody>
             {entries.map(en => (
               <tr key={en.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={styles.td}><strong>{en.tailor}</strong></td>
-                <td style={styles.td}>{en.batch}</td>
-                <td style={styles.td}>{en.pcs}</td>
-                <td style={styles.td}>₹ {(en.pcs * en.rate).toFixed(2)}</td>
+                <td style={styles.td}><strong>{en.tailor_name}</strong></td>
+                <td style={styles.td}>{en.batch_code}</td>
+                <td style={styles.td}>{en.pieces}</td>
+                <td style={styles.td}>₹ {(Number(en.pieces) * Number(en.rate_per_pc || 0)).toFixed(2)}</td>
                 <td style={styles.td}>{en.status}</td>
               </tr>
             ))}
@@ -1194,7 +1674,7 @@ function TailorLedgerModule() {
   );
 }
 
-// 11. Security & Admin User Manager (Create + Edit + Per-User Menu Rights + Delete)
+// 11. Security & Admin User Manager
 function SecurityAdminModule({ currentUser }: { currentUser: any }) {
   const [users, setUsers] = useState<any[]>([]);
   const [fullName, setFullName] = useState('');
@@ -1601,6 +2081,7 @@ function YearClosingBackupModule() {
       const { data: stock } = await supabase.from('pommys_fabric_stock').select('*');
       const { data: wip } = await supabase.from('pommys_production_wip').select('*');
       const { data: ready } = await supabase.from('pommys_ready_stock').select('*');
+      const { data: transfers } = await supabase.from('pommys_showroom_transfers').select('*');
 
       const backupPayload = {
         exportedAt: new Date().toISOString(),
@@ -1608,7 +2089,8 @@ function YearClosingBackupModule() {
         bills: bills || [],
         fabricStock: stock || [],
         productionWip: wip || [],
-        readyStock: ready || []
+        readyStock: ready || [],
+        showroomTransfers: transfers || []
       };
 
       const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
@@ -1627,7 +2109,7 @@ function YearClosingBackupModule() {
     <div style={styles.card}>
       <h4 style={{ margin: '0 0 12px 0', color: '#0f172a' }}>📁 Financial Year Closing & Backup</h4>
       <p style={{ color: '#475569', fontSize: '13px', marginBottom: '16px' }}>
-        Download a complete JSON snapshot of GRN bills, fabric stock, WIP batches, and ready stock for archiving and year-end audit.
+        Download a complete JSON snapshot of GRN bills, fabric stock, WIP batches, ready stock, and showroom transfers for archiving and year-end audit.
       </p>
       <button type="button" onClick={handleDownloadBackup} disabled={exporting} style={styles.primaryBtn}>
         {exporting ? 'Preparing Backup...' : '⬇️ Download Full ERP JSON Backup'}
@@ -1636,11 +2118,12 @@ function YearClosingBackupModule() {
   );
 }
 
-// 13. Master Reports with Supplier & Date Filters + Image Modal
+// 13. Master Reports with Godown, Showroom Bifurcation & Supplier History
 function ReportsModule() {
-  const [tab, setTab] = useState('godown');
+  const [tab, setTab] = useState<'godown' | 'showrooms' | 'history'>('godown');
   const [godownStock, setGodownStock] = useState<any[]>([]);
   const [readyStock, setReadyStock] = useState<any[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
   const [supplierHistory, setSupplierHistory] = useState<any[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
@@ -1650,7 +2133,7 @@ function ReportsModule() {
 
   useEffect(() => {
     if (tab === 'godown') fetchGodown();
-    if (tab === 'ready') fetchReady();
+    if (tab === 'showrooms') fetchShowroomBifurcation();
     if (tab === 'history') fetchHistory();
   }, [tab]);
 
@@ -1658,10 +2141,14 @@ function ReportsModule() {
     const { data } = await supabase.from('pommys_fabric_stock').select('*').gt('available_meters', 0.01).order('id', { ascending: false });
     if (data) setGodownStock(data);
   };
-  const fetchReady = async () => {
-    const { data } = await supabase.from('pommys_ready_stock').select('*').order('id', { ascending: false });
-    if (data) setReadyStock(data);
+
+  const fetchShowroomBifurcation = async () => {
+    const { data: ready } = await supabase.from('pommys_ready_stock').select('*').order('id', { ascending: false });
+    const { data: trf } = await supabase.from('pommys_showroom_transfers').select('*').order('id', { ascending: false });
+    if (ready) setReadyStock(ready);
+    if (trf) setTransfers(trf);
   };
+
   const fetchHistory = async () => {
     const { data: bills } = await supabase.from('pommys_grn_bills').select('*').order('bill_date', { ascending: false });
     const { data: stocks } = await supabase.from('pommys_fabric_stock').select('*');
@@ -1691,11 +2178,17 @@ function ReportsModule() {
     return matchSupplier && matchDate;
   });
 
+  const branchSummaryMap: Record<string, number> = {};
+  transfers.forEach(t => {
+    const b = t.showroom_name || 'Unknown Branch';
+    branchSummaryMap[b] = (branchSummaryMap[b] || 0) + (Number(t.transferred_pieces) || 0);
+  });
+
   return (
     <div style={styles.card}>
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px', flexWrap: 'wrap' }}>
         <button type="button" onClick={() => setTab('godown')} style={{ ...styles.secondaryBtn, background: tab === 'godown' ? '#1e293b' : 'transparent', color: tab === 'godown' ? 'white' : '#475569' }}>📦 Fabric Godown Stock</button>
-        <button type="button" onClick={() => setTab('ready')} style={{ ...styles.secondaryBtn, background: tab === 'ready' ? '#1e293b' : 'transparent', color: tab === 'ready' ? 'white' : '#475569' }}>👕 Finished Ready Stock</button>
+        <button type="button" onClick={() => setTab('showrooms')} style={{ ...styles.secondaryBtn, background: tab === 'showrooms' ? '#1e293b' : 'transparent', color: tab === 'showrooms' ? 'white' : '#475569' }}>🏬 Godown & Showroom Bifurcation</button>
         <button type="button" onClick={() => setTab('history')} style={{ ...styles.secondaryBtn, background: tab === 'history' ? '#1e293b' : 'transparent', color: tab === 'history' ? 'white' : '#475569' }}>📅 Supplier Date-wise History</button>
       </div>
 
@@ -1720,21 +2213,48 @@ function ReportsModule() {
         </div>
       )}
 
-      {tab === 'ready' && (
-        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', minWidth: '420px', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead><tr style={{ background: '#0f172a', color: 'white' }}>
-              <th style={styles.thSub}>Batch Ref</th><th style={styles.thSub}>Model Name</th><th style={styles.thSub}>Ready Pieces</th>
-            </tr></thead>
-            <tbody>
-              {readyStock.map((s, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={styles.td}>{s.batch_code}</td><td style={styles.td}>{s.model_name}</td>
-                  <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{s.ready_pieces}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {tab === 'showrooms' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px' }}>
+            <div style={{ border: '1px solid #86efac', background: '#f0fdf4', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#166534' }}>Central Godown</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#059669', marginTop: '4px' }}>
+                {readyStock.reduce((a, b) => a + (Number(b.ready_pieces) || 0), 0)} Pcs
+              </div>
+            </div>
+            {Object.entries(branchSummaryMap).map(([branch, pcs]) => (
+              <div key={branch} style={{ border: '1px solid #bae6fd', background: '#f0f9ff', borderRadius: '8px', padding: '12px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#0369a1' }}>{branch}</div>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0284c7', marginTop: '4px' }}>{pcs} Pcs</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', minWidth: '520px', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead><tr style={{ background: '#0f172a', color: 'white' }}>
+                <th style={styles.thSub}>Location / Showroom</th><th style={styles.thSub}>Challan / Batch</th><th style={styles.thSub}>Model / Color</th><th style={styles.thSub}>Pieces</th>
+              </tr></thead>
+              <tbody>
+                {readyStock.map((r, i) => (
+                  <tr key={`g-${i}`} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={styles.td}><strong>Central Godown</strong></td>
+                    <td style={styles.td}>{r.batch_code}</td>
+                    <td style={styles.td}>{r.model_name} ({r.color || 'Assorted'})</td>
+                    <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}</td>
+                  </tr>
+                ))}
+                {transfers.map((t, i) => (
+                  <tr key={`s-${i}`} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={styles.td}><strong style={{ color: '#0369a1' }}>{t.showroom_name}</strong></td>
+                    <td style={styles.td}>{t.challan_no} ({t.batch_code})</td>
+                    <td style={styles.td}>{t.model_name} ({t.color || '-'})</td>
+                    <td style={{ ...styles.td, color: '#0284c7', fontWeight: 'bold' }}>{t.transferred_pieces}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
