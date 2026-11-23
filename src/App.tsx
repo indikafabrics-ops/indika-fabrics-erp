@@ -108,6 +108,102 @@ function useIsMobileOrTablet() {
   return isCompact;
 }
 
+// Helper: Extract text from Image (Tesseract OCR) or PDF (pdfjs-dist)
+async function extractTextFromBillFile(file: File): Promise<string> {
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+  if (isPdf) {
+    try {
+      const pdfjsLib: any = await import('pdfjs-dist');
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      let fullText = '';
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const pageStrings = (content.items || []).map((it: any) => it.str || '');
+        fullText += pageStrings.join(' ') + '\n';
+      }
+      return fullText.trim();
+    } catch {
+      return '';
+    }
+  } else {
+    try {
+      const Tesseract: any = await import('tesseract.js');
+      const result = await Tesseract.recognize(file, 'eng');
+      return String(result?.data?.text || '').trim();
+    } catch {
+      return '';
+    }
+  }
+}
+
+// Helper: Parse extracted bill text into Bill & Item fields + mark doubtful/missing fields
+function parseBillTextToFields(rawText: string) {
+  const cleanText = rawText.replace(/\s+/g, ' ').trim();
+
+  // Bill No match
+  const billNoMatch =
+    rawText.match(/(?:inv(?:oice)?|bill|challan)\s*(?:no\.?|number|#)?\s*[:\-]?\s*([A-Za-z0-9\-/]+)/i) ||
+    cleanText.match(/\b(?:INV|BILL|CH|DC)[-/]?\d+[A-Za-z0-9\-/]*\b/i);
+  const extractedBillNo = billNoMatch ? billNoMatch[1] || billNoMatch[0] : '';
+
+  // Date match (YYYY-MM-DD or DD/MM/YYYY or DD-MM-YYYY)
+  let extractedBillDate = '';
+  const isoMatch = rawText.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/);
+  const dmyMatch = rawText.match(/\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2}|\d{2})\b/);
+  if (isoMatch) {
+    extractedBillDate = `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`;
+  } else if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3].length === 2 ? `20${dmyMatch[3]}` : dmyMatch[3];
+    extractedBillDate = `${year}-${month}-${day}`;
+  }
+
+  // GST match
+  const gstMatch = rawText.match(/\b\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]\b/i);
+  const extractedGst = gstMatch ? gstMatch[0].toUpperCase() : '';
+
+  // Meters / Qty match
+  const mtrMatch = rawText.match(/(\d+(?:\.\d+)?)\s*(?:mtr|mtrs|meter|meters|m\b)/i);
+  const pcsMatch = rawText.match(/(\d+(?:\.\d+)?)\s*(?:pcs|pc|piece|pieces)/i);
+  const extractedMeter = mtrMatch ? mtrMatch[1] : '';
+  const extractedPieces = pcsMatch ? pcsMatch[1] : '';
+
+  // Rate match
+  const rateMatch = rawText.match(/(?:rate|rt|price)\s*[:\-@]?\s*(?:rs\.?|₹)?\s*(\d+(?:\.\d+)?)/i);
+  const extractedRate = rateMatch ? rateMatch[1] : '';
+
+  // Design No match
+  const designMatch = rawText.match(/(?:design|dsn|style)\s*(?:no\.?|#)?\s*[:\-]?\s*([A-Za-z0-9\-]+)/i);
+  const extractedDesign = designMatch ? designMatch[1] : '';
+
+  const doubtFields: Record<string, boolean> = {
+    supplierName: true, // Always verify supplier
+    billNo: !extractedBillNo,
+    billDate: !extractedBillDate,
+    itemDetails: true,
+    designNo: !extractedDesign,
+    itemRate: !extractedRate,
+    totalMeter: !extractedMeter && !extractedPieces
+  };
+
+  return {
+    billNo: extractedBillNo,
+    billDate: extractedBillDate,
+    supplierGst: extractedGst,
+    itemDetails: extractedDesign ? `Design ${extractedDesign}` : '',
+    designNo: extractedDesign,
+    itemRate: extractedRate,
+    totalMeter: extractedMeter,
+    totalPieces: extractedPieces,
+    doubtFields
+  };
+}
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   if (!user) return <LoginScreen onLogin={setUser} />;
@@ -504,7 +600,7 @@ function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKe
   );
 }
 
-// 3. Low-Entry GRN + Quick Opening Stock (Color Optional Everywhere)
+// 3. Low-Entry GRN + Bill Auto-Fill + Doubt Highlight + Quick Opening Stock
 function GRNEntryForm() {
   const [mode, setMode] = useState<'GRN' | 'OPENING'>('GRN');
   const [openingStage, setOpeningStage] = useState<'FABRIC' | 'CUTPARTS' | 'WIP' | 'READY'>('FABRIC');
@@ -524,10 +620,78 @@ function GRNEntryForm() {
   const [saving, setSaving] = useState(false);
   const [selectedImageModal, setSelectedImageModal] = useState<string | null>(null);
 
+  // Bill Upload + OCR Auto-Fill + Doubt Highlight states
+  const [billFile, setBillFile] = useState<File | null>(null);
+  const [billPreviewUrl, setBillPreviewUrl] = useState<string | null>(null);
+  const [extractingBill, setExtractingBill] = useState(false);
+  const [extractionNote, setExtractionNote] = useState('');
+  const [doubtFields, setDoubtFields] = useState<Record<string, boolean>>({});
+
   const isRMG = bill.inwardType === 'RMG';
   const isJobWork = bill.inwardType === 'JOB_WORK';
 
+  const doubtInputStyle = (fieldKey: string, baseStyle: any) =>
+    doubtFields[fieldKey]
+      ? { ...baseStyle, borderColor: '#f59e0b', background: '#fffbeb' }
+      : baseStyle;
+
+  const clearDoubt = (fieldKey: string) => {
+    if (doubtFields[fieldKey]) {
+      setDoubtFields(prev => ({ ...prev, [fieldKey]: false }));
+    }
+  };
+
+  const handleBillFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files ? e.target.files[0] : null;
+    if (!file) return;
+
+    setBillFile(file);
+    if (file.type.startsWith('image/')) {
+      setBillPreviewUrl(URL.createObjectURL(file));
+    } else {
+      setBillPreviewUrl(null);
+    }
+
+    setExtractingBill(true);
+    setExtractionNote('Bill வாசிக்கப்படுகிறது... (Reading bill details)');
+    try {
+      const text = await extractTextFromBillFile(file);
+      if (!text) {
+        setExtractionNote('⚠️ Bill-லிருந்து தானாகப் படிக்க முடியவில்லை — மஞ்சள் நிற Doubt கட்டங்களை Manual ஆக நிரப்பவும்.');
+        setDoubtFields({ supplierName: true, billNo: true, billDate: true, itemDetails: true, itemRate: true, totalMeter: true });
+        return;
+      }
+
+      const parsed = parseBillTextToFields(text);
+      setBill(prev => ({
+        ...prev,
+        billNo: parsed.billNo || prev.billNo,
+        billDate: parsed.billDate || prev.billDate,
+        supplierGst: parsed.supplierGst || prev.supplierGst
+      }));
+
+      setItems(prev => {
+        const updated = [...prev];
+        updated[0] = {
+          ...updated[0],
+          itemDetails: parsed.itemDetails || updated[0].itemDetails,
+          designNo: parsed.designNo || updated[0].designNo,
+          itemRate: parsed.itemRate || updated[0].itemRate,
+          totalMeter: !isRMG && parsed.totalMeter ? parsed.totalMeter : updated[0].totalMeter,
+          totalPieces: isRMG && parsed.totalPieces ? parsed.totalPieces : updated[0].totalPieces
+        };
+        return updated;
+      });
+
+      setDoubtFields(parsed.doubtFields);
+      setExtractionNote('✅ கிடைத்த விவரங்கள் தானாக நிரப்பப்பட்டுள்ளன. மஞ்சள் நிற (Doubt) கட்டங்களை மட்டும் Manual ஆக நிரப்பவும்.');
+    } finally {
+      setExtractingBill(false);
+    }
+  };
+
   const handleSupplierSelect = (e: ChangeEvent<HTMLSelectElement>) => {
+    clearDoubt('supplierName');
     const val = e.target.value;
     if (val === 'NEW') {
       setBill({ ...bill, supplierName: '', supplierAddress: '', supplierGst: '', isNewSupplier: true });
@@ -541,8 +705,12 @@ function GRNEntryForm() {
     }
   };
 
-  const handleBillChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setBill({ ...bill, [e.target.name]: e.target.value });
+  const handleBillChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    clearDoubt(e.target.name);
+    setBill({ ...bill, [e.target.name]: e.target.value });
+  };
   const handleItemChange = (idx: number, field: string, val: any) => {
+    clearDoubt(field);
     const newItems = [...items];
     newItems[idx][field] = val;
     setItems(newItems);
@@ -584,6 +752,12 @@ function GRNEntryForm() {
     if (!bill.supplierName || !bill.billNo) { alert("Please enter Supplier Name and Bill No."); return; }
     setSaving(true);
     try {
+      if (billFile) {
+        const billExt = billFile.name.split('.').pop();
+        const billPath = `bills/${Date.now()}-${Math.random()}.${billExt}`;
+        await supabase.storage.from('assets').upload(billPath, billFile);
+      }
+
       const { data: billData, error: billError } = await supabase.from('pommys_grn_bills').insert([{
         supplier_name: bill.supplierName, supplier_place: bill.supplierAddress, gst_number: bill.supplierGst,
         bill_no: bill.billNo, bill_date: bill.billDate || null, lr_no: bill.lrNo, lr_date: bill.lrDate || null,
@@ -640,6 +814,10 @@ function GRNEntryForm() {
       alert("🎉 GRN saved successfully! Items added to Godown Stock.");
       setBill(initialBillState);
       setItems([{ ...initialItemState }]);
+      setBillFile(null);
+      setBillPreviewUrl(null);
+      setExtractionNote('');
+      setDoubtFields({});
     } catch (err: any) {
       alert("Error saving data: " + (err?.message || String(err)));
     }
@@ -765,6 +943,42 @@ function GRNEntryForm() {
         </div>
       ) : (
         <div style={styles.card}>
+          {/* Bill Auto-Fill Upload Banner */}
+          <div style={{ background: '#f0fdf4', border: '1px solid #86efac', padding: '14px 16px', borderRadius: '10px', marginBottom: '18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 'bold', color: '#166534', fontSize: '14px' }}>
+                  📄 Upload Bill (Photo / PDF) — Auto-Fill Details & Fill Doubt Fields Manually
+                </div>
+                <div style={{ fontSize: '12px', color: '#15803d', marginTop: '2px' }}>
+                  Bill Upload செய்தவுடன் விவரங்கள் தானாக நிரப்பப்படும்; மஞ்சள் நிற (⚠️ Doubt) கட்டங்களை மட்டும் நீங்கள் Manual ஆக நிரப்பவும்.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={handleBillFileUpload}
+                  style={{ fontSize: '12px', maxWidth: '230px' }}
+                />
+                {billPreviewUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedImageModal(billPreviewUrl)}
+                    style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '7px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    👁️ View Bill
+                  </button>
+                )}
+              </div>
+            </div>
+            {(extractingBill || extractionNote) && (
+              <div style={{ marginTop: '10px', fontSize: '12px', fontWeight: 'bold', color: extractingBill ? '#b45309' : '#0f172a' }}>
+                {extractingBill ? '⏳ Bill-லிருந்து விவரங்கள் எடுக்கப்படுகின்றன...' : extractionNote}
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '14px 16px', borderRadius: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
             <h4 style={{ margin: 0, color: '#0369a1', fontSize: '15px' }}>Select Inward Type:</h4>
             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap' }}>
@@ -777,23 +991,63 @@ function GRNEntryForm() {
           <h4 style={{ color: '#0f172a', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' }}>A) Supplier & Bill Details</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '24px' }}>
             <div>
-              <label style={styles.label}>{isJobWork ? 'Client / Supplier Name *' : 'Supplier Name *'}</label>
-              <select value={bill.isNewSupplier ? 'NEW' : suppliers.find(s => s.name === bill.supplierName)?.id || ''} onChange={handleSupplierSelect} style={styles.input}>
+              <label style={styles.label}>
+                {isJobWork ? 'Client / Supplier Name *' : 'Supplier Name *'}
+                {doubtFields.supplierName && <span style={{ color: '#b45309', marginLeft: '6px' }}>(⚠️ Doubt - Verify)</span>}
+              </label>
+              <select
+                value={bill.isNewSupplier ? 'NEW' : suppliers.find(s => s.name === bill.supplierName)?.id || ''}
+                onChange={handleSupplierSelect}
+                style={doubtInputStyle('supplierName', styles.input)}
+              >
                 <option value="">-- Select Existing --</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 <option value="NEW" style={{ fontWeight: 'bold', color: '#2563eb' }}>+ Add New Party</option>
               </select>
-              {bill.isNewSupplier && <input type="text" name="supplierName" placeholder="Enter New Party Name" value={bill.supplierName} onChange={handleBillChange} style={{ ...styles.input, marginTop: '10px', borderColor: '#2563eb' }} />}
+              {bill.isNewSupplier && (
+                <input
+                  type="text"
+                  name="supplierName"
+                  placeholder="Enter New Party Name"
+                  value={bill.supplierName}
+                  onChange={handleBillChange}
+                  style={{ ...styles.input, marginTop: '10px', borderColor: '#2563eb' }}
+                />
+              )}
             </div>
-            <div><label style={styles.label}>{isJobWork ? 'Challan No. *' : 'Bill No. *'}</label><input type="text" name="billNo" value={bill.billNo} onChange={handleBillChange} style={styles.input} /></div>
-            <div><label style={styles.label}>{isJobWork ? 'Challan Date' : 'Bill Date'}</label><input type="date" name="billDate" value={bill.billDate} onChange={handleBillChange} style={styles.input} /></div>
+            <div>
+              <label style={styles.label}>
+                {isJobWork ? 'Challan No. *' : 'Bill No. *'}
+                {doubtFields.billNo && <span style={{ color: '#b45309', marginLeft: '6px' }}>(⚠️ Doubt)</span>}
+              </label>
+              <input
+                type="text"
+                name="billNo"
+                value={bill.billNo}
+                onChange={handleBillChange}
+                style={doubtInputStyle('billNo', styles.input)}
+              />
+            </div>
+            <div>
+              <label style={styles.label}>
+                {isJobWork ? 'Challan Date' : 'Bill Date'}
+                {doubtFields.billDate && <span style={{ color: '#b45309', marginLeft: '6px' }}>(⚠️ Doubt)</span>}
+              </label>
+              <input
+                type="date"
+                name="billDate"
+                value={bill.billDate}
+                onChange={handleBillChange}
+                style={doubtInputStyle('billDate', styles.input)}
+              />
+            </div>
             <div><label style={styles.label}>No. of Bales</label><input type="number" name="noOfBales" value={bill.noOfBales} onChange={handleBillChange} style={styles.input} /></div>
             <div><label style={styles.label}>LR No.</label><input type="text" name="lrNo" value={bill.lrNo} onChange={handleBillChange} style={styles.input} /></div>
             <div><label style={styles.label}>Bale No(s).</label><input type="text" name="baleNo" value={bill.baleNo} placeholder="Ex: B-101" onChange={handleBillChange} style={styles.input} /></div>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9', flexWrap: 'wrap', gap: '10px' }}>
-            <h4 style={{ color: '#0f172a', margin: 0 }}>B) Inventory Breakdown (Color is Optional)</h4>
+            <h4 style={{ color: '#0f172a', margin: 0 }}>B) Inventory Breakdown (Color is Optional • Doubt Fields Highlighted in Yellow)</h4>
             <button type="button" onClick={handleAddColorVariant} style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
               + Duplicate Row for Another Color (Optional)
             </button>
@@ -839,12 +1093,27 @@ function GRNEntryForm() {
                   const netStock = qty - (Number(item.damage) || 0) - (Number(item.shortage) || 0) - (Number(item.returnEntry) || 0);
                   return (
                     <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', background: idx % 2 === 0 ? '#f8fafc' : 'white' }}>
-                      <td style={styles.td}><input type="text" placeholder="Item" value={item.itemDetails} onChange={(e) => handleItemChange(idx, 'itemDetails', e.target.value)} style={styles.tblInput} /></td>
+                      <td style={styles.td}>
+                        <input
+                          type="text"
+                          placeholder={idx === 0 && doubtFields.itemDetails ? 'Doubt - Enter Item' : 'Item'}
+                          value={item.itemDetails}
+                          onChange={(e) => handleItemChange(idx, 'itemDetails', e.target.value)}
+                          style={idx === 0 ? doubtInputStyle('itemDetails', styles.tblInput) : styles.tblInput}
+                        />
+                      </td>
                       {!isRMG && <td style={styles.td}><input type="text" value={item.quality} onChange={(e) => handleItemChange(idx, 'quality', e.target.value)} style={styles.tblInput} /></td>}
                       {!isRMG && <td style={styles.td}><input type="text" value={item.width} onChange={(e) => handleItemChange(idx, 'width', e.target.value)} style={styles.tblInput} /></td>}
                       {!isRMG && <td style={styles.td}><input type="text" value={item.meterFold} onChange={(e) => handleItemChange(idx, 'meterFold', e.target.value)} style={styles.tblInput} /></td>}
                       {isRMG && <td style={styles.td}><input type="text" value={item.sizeDetails} onChange={(e) => handleItemChange(idx, 'sizeDetails', e.target.value)} style={styles.tblInput} /></td>}
-                      <td style={styles.td}><input type="text" value={item.designNo} onChange={(e) => handleItemChange(idx, 'designNo', e.target.value)} style={styles.tblInput} /></td>
+                      <td style={styles.td}>
+                        <input
+                          type="text"
+                          value={item.designNo}
+                          onChange={(e) => handleItemChange(idx, 'designNo', e.target.value)}
+                          style={idx === 0 ? doubtInputStyle('designNo', styles.tblInput) : styles.tblInput}
+                        />
+                      </td>
                       <td style={styles.td}><input type="text" placeholder="Optional" value={item.color} onChange={(e) => handleItemChange(idx, 'color', e.target.value)} style={styles.tblInput} /></td>
                       <td style={styles.td}>
                         <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
@@ -852,14 +1121,45 @@ function GRNEntryForm() {
                           {item.imageFile && <button type="button" onClick={() => setSelectedImageModal(URL.createObjectURL(item.imageFile))} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>Preview</button>}
                         </div>
                       </td>
-                      {!isJobWork && <td style={styles.td}><input type="number" value={item.itemRate} onChange={(e) => handleItemChange(idx, 'itemRate', e.target.value)} style={styles.tblInput} /></td>}
+                      {!isJobWork && (
+                        <td style={styles.td}>
+                          <input
+                            type="number"
+                            value={item.itemRate}
+                            onChange={(e) => handleItemChange(idx, 'itemRate', e.target.value)}
+                            style={idx === 0 ? doubtInputStyle('itemRate', styles.tblInput) : styles.tblInput}
+                          />
+                        </td>
+                      )}
                       {!isJobWork && <td style={styles.td}>
                         <select value={item.gstPercentage} onChange={(e) => handleItemChange(idx, 'gstPercentage', e.target.value)} style={styles.tblInput}>
                           <option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option>
                         </select>
                       </td>}
-                      {!isRMG && <td style={styles.td}><input type="number" value={item.totalMeter} onChange={(e) => handleItemChange(idx, 'totalMeter', e.target.value)} style={{ ...styles.tblInput, border: '1px solid #3b82f6', background: '#eff6ff' }} /></td>}
-                      {isRMG && <td style={styles.td}><input type="number" value={item.totalPieces} onChange={(e) => handleItemChange(idx, 'totalPieces', e.target.value)} style={{ ...styles.tblInput, border: '1px solid #3b82f6', background: '#eff6ff' }} /></td>}
+                      {!isRMG && (
+                        <td style={styles.td}>
+                          <input
+                            type="number"
+                            value={item.totalMeter}
+                            onChange={(e) => handleItemChange(idx, 'totalMeter', e.target.value)}
+                            style={idx === 0 && doubtFields.totalMeter
+                              ? doubtInputStyle('totalMeter', { ...styles.tblInput, border: '1px solid #f59e0b' })
+                              : { ...styles.tblInput, border: '1px solid #3b82f6', background: '#eff6ff' }}
+                          />
+                        </td>
+                      )}
+                      {isRMG && (
+                        <td style={styles.td}>
+                          <input
+                            type="number"
+                            value={item.totalPieces}
+                            onChange={(e) => handleItemChange(idx, 'totalPieces', e.target.value)}
+                            style={idx === 0 && doubtFields.totalMeter
+                              ? doubtInputStyle('totalMeter', { ...styles.tblInput, border: '1px solid #f59e0b' })
+                              : { ...styles.tblInput, border: '1px solid #3b82f6', background: '#eff6ff' }}
+                          />
+                        </td>
+                      )}
                       {!isJobWork && <td style={styles.td}><strong style={{ color: '#334155' }}>₹ {totalVal.toFixed(2)}</strong></td>}
                       <td style={styles.td}><input type="number" value={item.damage} onChange={(e) => handleItemChange(idx, 'damage', e.target.value)} style={styles.tblInput} /></td>
                       <td style={styles.td}><input type="number" value={item.shortage} onChange={(e) => handleItemChange(idx, 'shortage', e.target.value)} style={styles.tblInput} /></td>
@@ -883,8 +1183,8 @@ function GRNEntryForm() {
       {selectedImageModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: 'white', padding: '20px', borderRadius: '10px', textAlign: 'center', maxWidth: '500px', width: '100%' }}>
-            <h4 style={{ margin: '0 0 15px 0' }}>Design Preview</h4>
-            <img src={selectedImageModal} alt="Design Preview" style={{ width: '100%', maxHeight: '350px', objectFit: 'contain', borderRadius: '6px', marginBottom: '15px' }} />
+            <h4 style={{ margin: '0 0 15px 0' }}>Bill / Design Preview</h4>
+            <img src={selectedImageModal} alt="Preview" style={{ width: '100%', maxHeight: '350px', objectFit: 'contain', borderRadius: '6px', marginBottom: '15px' }} />
             <button type="button" onClick={() => setSelectedImageModal(null)} style={styles.primaryBtn}>Close</button>
           </div>
         </div>
@@ -1039,7 +1339,7 @@ function CuttingEntryModule() {
   );
 }
 
-// 5. Production WIP Tracking (Full or Partial Piece Movement)
+// 5. Production WIP Tracking
 function ProductionTracking() {
   const [wipBatches, setWipBatches] = useState<any[]>([]);
   const [moveQtyMap, setMoveQtyMap] = useState<Record<number, string>>({});
@@ -1234,13 +1534,11 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
   const [transfers, setTransfers] = useState<any[]>([]);
   const [showrooms, setShowrooms] = useState<ShowroomRecord[]>([]);
 
-  // Form state for adding a new Retail Showroom with Address
   const [newShowroomName, setNewShowroomName] = useState('');
   const [newShowroomAddress, setNewShowroomAddress] = useState('');
   const [newShowroomPhone, setNewShowroomPhone] = useState('');
   const [addingShowroom, setAddingShowroom] = useState(false);
 
-  // Form state for transferring Ready Goods to a Showroom
   const [selectedStockId, setSelectedStockId] = useState('');
   const [targetShowroom, setTargetShowroom] = useState('');
   const [challanNo, setChallanNo] = useState('');
@@ -1261,7 +1559,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
     const { data: srData, error: srErr } = await supabase.from('pommys_showrooms').select('*').order('id', { ascending: true });
     let combinedShowrooms: ShowroomRecord[] = !srErr && srData ? srData : [];
 
-    // Ensure any showroom referenced in existing transfers is also listed
     const existingNames = new Set(combinedShowrooms.map(s => s.showroom_name.trim().toLowerCase()));
     loadedTransfers.forEach((t: any) => {
       const name = String(t.showroom_name || '').trim();
@@ -1302,7 +1599,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
 
       const { data, error } = await supabase.from('pommys_showrooms').insert([payload]).select().single();
       if (error) {
-        // Fallback if table isn't created yet in Supabase
         setShowrooms(prev => [...prev, { id: Date.now(), ...payload }]);
       } else {
         setShowrooms(prev => [...prev, data || payload]);
@@ -1409,7 +1705,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Top Stock Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
         <div style={{ ...styles.card, borderTop: '4px solid #059669' }}>
           <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>CENTRAL GODOWN READY STOCK</div>
@@ -1425,7 +1720,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         </div>
       </div>
 
-      {/* Step A: Add New Retail Showroom with Full Address */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 12px 0', color: '#0f172a' }}>🏪 1. Add Retail Showroom (Name & Full Address)</h4>
         <form onSubmit={handleAddShowroom} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
@@ -1433,7 +1727,7 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
             <label style={styles.label}>Showroom Name *</label>
             <input
               type="text"
-              placeholder="Ex: Pommys Showroom - Branch"
+              placeholder="Enter Showroom Name"
               value={newShowroomName}
               onChange={(e) => setNewShowroomName(e.target.value)}
               style={styles.input}
@@ -1468,7 +1762,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         </form>
       </div>
 
-      {/* Step B: Transfer Ready Goods to Added Retail Showroom */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🚚 2. Transfer Ready Goods to Retail Showroom</h4>
         {showrooms.length === 0 ? (
@@ -1523,7 +1816,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         )}
       </div>
 
-      {/* Step C: Showroom-Wise Stock Bifurcation (Showing Name, Address & Stock) */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🏬 Showroom-Wise Stock Bifurcation</h4>
         {showroomBifurcation.length === 0 ? (
@@ -1555,7 +1847,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         )}
       </div>
 
-      {/* Central Godown Ready Stock Table */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>👕 Central Godown Ready Stock</h4>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -1606,7 +1897,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         </div>
       </div>
 
-      {/* Showroom Transfer Challan Log */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>📄 Showroom Transfer Challan Register</h4>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -2447,8 +2737,8 @@ function ReportsModule() {
       {selectedImage && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: 'white', padding: '20px', borderRadius: '10px', textAlign: 'center', maxWidth: '500px', width: '100%' }}>
-            <h4 style={{ margin: '0 0 15px 0' }}>Design Preview</h4>
-            <img src={selectedImage} alt="Design Preview" style={{ width: '100%', maxHeight: '350px', objectFit: 'contain', borderRadius: '6px', marginBottom: '15px' }} />
+            <h4 style={{ margin: '0 0 15px 0' }}>Bill / Design Preview</h4>
+            <img src={selectedImage} alt="Preview" style={{ width: '100%', maxHeight: '350px', objectFit: 'contain', borderRadius: '6px', marginBottom: '15px' }} />
             <button type="button" onClick={() => setSelectedImage(null)} style={styles.primaryBtn}>Close</button>
           </div>
         </div>
