@@ -59,15 +59,15 @@ const ALL_MENU_KEYS: MenuKey[] = [
 
 const MENU_ITEMS: { key: MenuKey; label: string; title: string; roles: UserRole[] }[] = [
   { key: 'dashboard', label: '🏠 Dashboard Overview', title: 'Pommys Garment ERP — Executive Dashboard', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'grn', label: '📥 Purchase & GRN', title: 'Goods Receipt Note & Opening Stock (Master GRN)', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'cutting', label: '✂️ Fabric Issue & Cutting', title: 'Fabric Issue, Cutparts & Cutting Module', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'production', label: '🏭 Production WIP', title: 'Live Production Tracking & Partial WIP', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'grn', label: '📥 Purchase & Opening Stock', title: 'Purchase GRN & Quick Opening Stock', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'cutting', label: '✂️ Fabric Issue & Cutting', title: 'Fabric Issue & Cutting Module', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'production', label: '🏭 Production WIP', title: 'Live Production Tracking (WIP)', roles: ['ADMIN', 'OFFICE'] },
   { key: 'storeroom', label: '🏪 Store Room & Trims', title: 'Store Room, Accessories & Trims Stock', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'readystock', label: '👕 Ready Stock & Showrooms', title: 'Ready Stock Godown & Retail Showroom Stock Bifurcation', roles: ['ADMIN', 'OFFICE', 'SALESMAN'] },
+  { key: 'readystock', label: '👕 Ready Stock & Showrooms', title: 'Ready Stock Godown & Retail Showroom Stock', roles: ['ADMIN', 'OFFICE', 'SALESMAN'] },
   { key: 'catalog', label: '📒 Salesman & Customer Catalog', title: 'Design Catalog & Sample Sheet', roles: ['ADMIN', 'OFFICE', 'SALESMAN', 'CUSTOMER'] },
   { key: 'costing', label: '🧮 Costing & Rate Fixer', title: 'Garment Costing & Wholesale/Retail Rate Fixer', roles: ['ADMIN'] },
   { key: 'tailor', label: '🧵 Tailor Ledger & Jobwork', title: 'Tailor & Stitching Job-Work Ledger', roles: ['ADMIN', 'OFFICE'] },
-  { key: 'reports', label: '📊 Master Reports & History', title: 'Godown, Showroom Stock & Supplier History Reports', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'reports', label: '📊 Master Reports & Export', title: 'Godown, Showroom Stock & Supplier History Reports', roles: ['ADMIN', 'OFFICE'] },
   { key: 'security', label: '🔐 Security & Admin', title: 'User Roles, Rights & User Manager', roles: ['ADMIN'] },
   { key: 'yearclosing', label: '📁 Year Closing & Backup', title: 'Financial Year Closing & Data Backup Center', roles: ['ADMIN'] }
 ];
@@ -120,7 +120,7 @@ export default function App() {
   return <Dashboard user={user} onLogout={() => setUser(null)} />;
 }
 
-// 1. 4 Separate Role Login Options (Admin-Created Accounts Only)
+// 1. 4 Separate Role Login Options
 function LoginScreen({ onLogin }: { onLogin: (user: any) => void }) {
   const [selectedPortal, setSelectedPortal] = useState<UserRole>('ADMIN');
   const [mobile, setMobile] = useState('');
@@ -407,10 +407,10 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
           {hasQuickActions && (
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {effectiveMenuKeys.includes('grn') && (
-                <button type="button" onClick={() => handleSelectMenu('grn')} style={{ ...styles.secondaryBtn, padding: '6px 10px', fontSize: '12px' }}>+ New GRN</button>
+                <button type="button" onClick={() => handleSelectMenu('grn')} style={{ ...styles.secondaryBtn, padding: '6px 10px', fontSize: '12px' }}>+ Entry / Stock</button>
               )}
               {effectiveMenuKeys.includes('cutting') && (
-                <button type="button" onClick={() => handleSelectMenu('cutting')} style={{ ...styles.secondaryBtn, padding: '6px 10px', fontSize: '12px' }}>+ New Cutting</button>
+                <button type="button" onClick={() => handleSelectMenu('cutting')} style={{ ...styles.secondaryBtn, padding: '6px 10px', fontSize: '12px' }}>+ Cutting</button>
               )}
               {effectiveMenuKeys.includes('reports') && (
                 <button type="button" onClick={() => handleSelectMenu('reports')} style={{ ...styles.secondaryBtn, padding: '6px 10px', fontSize: '12px' }}>Reports</button>
@@ -438,7 +438,7 @@ function Dashboard({ user, onLogout }: { user: any; onLogout: () => void }) {
   );
 }
 
-// 0. Executive Dashboard Overview (Including Showroom Transfer Summary)
+// 0. Executive Dashboard Overview
 function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKey) => void; allowedMenus: typeof MENU_ITEMS }) {
   const [stats, setStats] = useState({
     fabricMeters: 0,
@@ -472,7 +472,7 @@ function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKe
     { label: 'Godown Fabric Stock (M)', value: stats.fabricMeters.toFixed(2), color: '#2563eb', target: 'grn' as MenuKey },
     { label: 'Active WIP Batches', value: String(stats.wipCount), color: '#d97706', target: 'production' as MenuKey },
     { label: 'Godown Ready Pieces', value: String(stats.readyPieces), color: '#059669', target: 'readystock' as MenuKey },
-    { label: 'Showroom Transferred Pcs', value: String(stats.transferredPieces), color: '#7c3aed', target: 'readystock' as MenuKey }
+    { label: 'Showroom Stock (Transferred)', value: String(stats.transferredPieces), color: '#7c3aed', target: 'readystock' as MenuKey }
   ];
 
   return (
@@ -510,7 +510,7 @@ function DashboardHome({ onNavigate, allowedMenus }: { onNavigate: (menu: MenuKe
   );
 }
 
-// 3. GRN Master Form + Color-Wise Quick Rows + Opening / Bulk Entry
+// 3. Low-Entry GRN + Quick Opening Stock (Color Optional Everywhere)
 function GRNEntryForm() {
   const [mode, setMode] = useState<'GRN' | 'OPENING'>('GRN');
   const [openingStage, setOpeningStage] = useState<'FABRIC' | 'CUTPARTS' | 'WIP' | 'READY'>('FABRIC');
@@ -560,7 +560,6 @@ function GRNEntryForm() {
   };
   const handleAddItem = () => setItems([...items, { ...initialItemState }]);
 
-  // Color-wise quick row: copies Item, Quality, Width, Fold, Design No, Rate, GST from previous row
   const handleAddColorVariant = () => {
     const last = items[items.length - 1] || initialItemState;
     setItems([
@@ -618,11 +617,22 @@ function GRNEntryForm() {
         const netQty = qty - dmg - short - ret;
 
         stockItems.push({
-          bill_id: billData.id, item_name: item.itemDetails, quality: item.quality, fabric_width: item.width, meter_fold: item.meterFold,
-          rate_per_meter: isJobWork ? 0 : (Number(item.itemRate) || 0), gst_percentage: Number(item.gstPercentage) || 0,
-          design_no: item.designNo, color: item.color, image_url: imageUrl,
-          total_meters: qty, damage_meters: dmg, shortage_meters: short, return_booking_details: item.returnBooking,
-          net_meters: netQty, available_meters: netQty
+          bill_id: billData.id,
+          item_name: item.itemDetails || 'Fabric',
+          quality: item.quality,
+          fabric_width: item.width,
+          meter_fold: item.meterFold,
+          rate_per_meter: isJobWork ? 0 : (Number(item.itemRate) || 0),
+          gst_percentage: Number(item.gstPercentage) || 0,
+          design_no: item.designNo || '-',
+          color: item.color?.trim() || '-',
+          image_url: imageUrl,
+          total_meters: qty,
+          damage_meters: dmg,
+          shortage_meters: short,
+          return_booking_details: item.returnBooking,
+          net_meters: netQty,
+          available_meters: netQty
         });
       }
 
@@ -633,7 +643,7 @@ function GRNEntryForm() {
         setSuppliers([...suppliers, { id: suppliers.length + 1, name: bill.supplierName, address: bill.supplierAddress, gst: bill.supplierGst }]);
       }
 
-      alert("🎉 GRN saved successfully! Color-wise items added to Godown Stock.");
+      alert("🎉 GRN saved successfully! Items added to Godown Stock.");
       setBill(initialBillState);
       setItems([{ ...initialItemState }]);
     } catch (err: any) {
@@ -642,7 +652,6 @@ function GRNEntryForm() {
     setSaving(false);
   };
 
-  // Quick Opening Stock Entry for Fabric / Cutparts / WIP / Ready Goods
   const handleSaveOpeningStock = async (e: FormEvent) => {
     e.preventDefault();
     const numQty = Number(openingQty);
@@ -651,13 +660,14 @@ function GRNEntryForm() {
       return;
     }
     const batchLabel = openingBatch.trim() || `OPN-${openingStage}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const colorVal = openingColor.trim() || '-';
     setSavingOpening(true);
     try {
       if (openingStage === 'FABRIC') {
         const { error } = await supabase.from('pommys_fabric_stock').insert([{
-          item_name: `Opening Fabric (${openingModel})`,
+          item_name: openingModel.trim() || 'Opening Fabric',
           design_no: openingDesign.trim() || batchLabel,
-          color: openingColor.trim() || 'Assorted',
+          color: colorVal,
           total_meters: numQty,
           net_meters: numQty,
           available_meters: numQty,
@@ -669,7 +679,7 @@ function GRNEntryForm() {
         const statusVal = openingStage === 'CUTPARTS' ? 'Cutting' : 'Stitching';
         const { error } = await supabase.from('pommys_production_wip').insert([{
           batch_code: batchLabel,
-          model_name: `${openingModel}${openingDesign ? ` - ${openingDesign.trim()}` : ''}${openingColor ? ` (${openingColor.trim()})` : ''}`,
+          model_name: `${openingModel.trim() || 'Garment'}${openingDesign.trim() ? ` - ${openingDesign.trim()}` : ''}${openingColor.trim() ? ` (${openingColor.trim()})` : ''}`,
           total_pieces: numQty,
           current_status: statusVal
         }]);
@@ -677,15 +687,15 @@ function GRNEntryForm() {
       } else if (openingStage === 'READY') {
         const { error } = await supabase.from('pommys_ready_stock').insert([{
           batch_code: batchLabel,
-          model_name: openingModel,
+          model_name: openingModel.trim() || 'Garment',
           design_no: openingDesign.trim() || '-',
-          color: openingColor.trim() || 'Assorted',
+          color: colorVal,
           ready_pieces: numQty
         }]);
         if (error) throw error;
       }
 
-      alert(`✅ Opening ${openingStage} (${numQty}) added to live stock!`);
+      alert(`✅ ${openingStage} stock (${numQty}) saved successfully!`);
       setOpeningDesign('');
       setOpeningColor('');
       setOpeningQty('');
@@ -705,7 +715,7 @@ function GRNEntryForm() {
           onClick={() => setMode('GRN')}
           style={{ ...styles.secondaryBtn, background: mode === 'GRN' ? '#0f172a' : '#e2e8f0', color: mode === 'GRN' ? 'white' : '#334155' }}
         >
-          📥 Purchase & Color-Wise GRN
+          📥 Purchase & GRN Entry
         </button>
         <button
           type="button"
@@ -718,13 +728,13 @@ function GRNEntryForm() {
 
       {mode === 'OPENING' ? (
         <div style={styles.card}>
-          <h4 style={{ margin: '0 0 12px 0', color: '#0f172a' }}>⚡ Quick Opening Stock Upload (Existing Stock Entry)</h4>
+          <h4 style={{ margin: '0 0 10px 0', color: '#0f172a' }}>⚡ Quick Opening Stock Upload (Low Entry — Color Optional)</h4>
           <p style={{ fontSize: '13px', color: '#475569', marginTop: 0 }}>
-            கையில் ஏற்கனவே உள்ள Fabric, Cutparts, On-Process (WIP) அல்லது Ready Goods-ஐ ஒரே படிவத்தில் உடனே ஏற்றலாம்.
+            Stage மற்றும் Qty மட்டும் கொடுத்தால் போதும்; Batch Code மற்றும் Color அவசியமில்லை என்றால் காலியாக விடலாம்.
           </p>
           <form onSubmit={handleSaveOpeningStock} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
             <div>
-              <label style={styles.label}>Stock Stage</label>
+              <label style={styles.label}>1. Stock Stage *</label>
               <select value={openingStage} onChange={(e) => setOpeningStage(e.target.value as any)} style={styles.input}>
                 <option value="FABRIC">Fabric Stock (Meters)</option>
                 <option value="CUTPARTS">Cutparts (Pieces)</option>
@@ -733,28 +743,28 @@ function GRNEntryForm() {
               </select>
             </div>
             <div>
-              <label style={styles.label}>Batch / Ref Code</label>
+              <label style={styles.label}>2. Model / Item *</label>
+              <input type="text" placeholder="Nighty / Kurti / Night Suit" value={openingModel} onChange={(e) => setOpeningModel(e.target.value)} style={styles.input} required />
+            </div>
+            <div>
+              <label style={styles.label}>3. Meters / Pieces Qty *</label>
+              <input type="number" placeholder="Enter Qty" value={openingQty} onChange={(e) => setOpeningQty(e.target.value)} style={styles.input} required />
+            </div>
+            <div>
+              <label style={styles.label}>Design No (Optional)</label>
+              <input type="text" placeholder="Optional" value={openingDesign} onChange={(e) => setOpeningDesign(e.target.value)} style={styles.input} />
+            </div>
+            <div>
+              <label style={styles.label}>Color (Optional)</label>
+              <input type="text" placeholder="Optional" value={openingColor} onChange={(e) => setOpeningColor(e.target.value)} style={styles.input} />
+            </div>
+            <div>
+              <label style={styles.label}>Batch / Ref (Optional)</label>
               <input type="text" placeholder="Auto if blank" value={openingBatch} onChange={(e) => setOpeningBatch(e.target.value)} style={styles.input} />
-            </div>
-            <div>
-              <label style={styles.label}>Model / Item</label>
-              <input type="text" placeholder="Nighty / Kurti / Night Suit" value={openingModel} onChange={(e) => setOpeningModel(e.target.value)} style={styles.input} />
-            </div>
-            <div>
-              <label style={styles.label}>Design No</label>
-              <input type="text" placeholder="Ex: D-501" value={openingDesign} onChange={(e) => setOpeningDesign(e.target.value)} style={styles.input} />
-            </div>
-            <div>
-              <label style={styles.label}>Color</label>
-              <input type="text" placeholder="Ex: Maroon / Navy" value={openingColor} onChange={(e) => setOpeningColor(e.target.value)} style={styles.input} />
-            </div>
-            <div>
-              <label style={styles.label}>Meters / Pieces Qty</label>
-              <input type="number" placeholder="Qty" value={openingQty} onChange={(e) => setOpeningQty(e.target.value)} style={styles.input} required />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
               <button type="submit" disabled={savingOpening} style={{ ...styles.successBtn, width: '100%' }}>
-                {savingOpening ? 'Saving...' : '+ Add Opening Stock'}
+                {savingOpening ? 'Saving...' : '+ Add Stock'}
               </button>
             </div>
           </form>
@@ -770,10 +780,10 @@ function GRNEntryForm() {
             </div>
           </div>
 
-          <h4 style={{ color: '#0f172a', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' }}>A) Supplier & Logistics Details</h4>
+          <h4 style={{ color: '#0f172a', marginBottom: '14px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' }}>A) Supplier & Bill Details</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '14px', marginBottom: '24px' }}>
             <div>
-              <label style={styles.label}>{isJobWork ? 'Client / Supplier Name' : 'Supplier Name'}</label>
+              <label style={styles.label}>{isJobWork ? 'Client / Supplier Name *' : 'Supplier Name *'}</label>
               <select value={bill.isNewSupplier ? 'NEW' : suppliers.find(s => s.name === bill.supplierName)?.id || ''} onChange={handleSupplierSelect} style={styles.input}>
                 <option value="">-- Select Existing --</option>
                 {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -781,29 +791,26 @@ function GRNEntryForm() {
               </select>
               {bill.isNewSupplier && <input type="text" name="supplierName" placeholder="Enter New Party Name" value={bill.supplierName} onChange={handleBillChange} style={{ ...styles.input, marginTop: '10px', borderColor: '#2563eb' }} />}
             </div>
-            <div><label style={styles.label}>Address</label><input type="text" name="supplierAddress" value={bill.supplierAddress} onChange={handleBillChange} disabled={!bill.isNewSupplier && bill.supplierName !== ''} style={styles.input} /></div>
-            <div><label style={styles.label}>GST Number</label><input type="text" name="supplierGst" value={bill.supplierGst} onChange={handleBillChange} disabled={!bill.isNewSupplier && bill.supplierName !== ''} style={styles.input} /></div>
-            <div><label style={styles.label}>{isJobWork ? 'Challan No.' : 'Bill No.'}</label><input type="text" name="billNo" value={bill.billNo} onChange={handleBillChange} style={styles.input} /></div>
+            <div><label style={styles.label}>{isJobWork ? 'Challan No. *' : 'Bill No. *'}</label><input type="text" name="billNo" value={bill.billNo} onChange={handleBillChange} style={styles.input} /></div>
             <div><label style={styles.label}>{isJobWork ? 'Challan Date' : 'Bill Date'}</label><input type="date" name="billDate" value={bill.billDate} onChange={handleBillChange} style={styles.input} /></div>
             <div><label style={styles.label}>No. of Bales</label><input type="number" name="noOfBales" value={bill.noOfBales} onChange={handleBillChange} style={styles.input} /></div>
             <div><label style={styles.label}>LR No.</label><input type="text" name="lrNo" value={bill.lrNo} onChange={handleBillChange} style={styles.input} /></div>
-            <div><label style={styles.label}>LR Date</label><input type="date" name="lrDate" value={bill.lrDate} onChange={handleBillChange} style={styles.input} /></div>
             <div><label style={styles.label}>Bale No(s).</label><input type="text" name="baleNo" value={bill.baleNo} placeholder="Ex: B-101" onChange={handleBillChange} style={styles.input} /></div>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9', flexWrap: 'wrap', gap: '10px' }}>
-            <h4 style={{ color: '#0f172a', margin: 0 }}>B) Color-Wise Inventory Breakdown</h4>
+            <h4 style={{ color: '#0f172a', margin: 0 }}>B) Inventory Breakdown (Color is Optional)</h4>
             <button type="button" onClick={handleAddColorVariant} style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
-              🎨 + Add Color Row (Same Design & Rate)
+              + Duplicate Row for Another Color (Optional)
             </button>
           </div>
 
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: '20px', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
-            <table style={{ width: '100%', minWidth: '1350px', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
+            <table style={{ width: '100%', minWidth: '1320px', borderCollapse: 'collapse', textAlign: 'left', background: 'white' }}>
               <thead>
                 <tr style={{ background: '#0f172a', color: 'white', textAlign: 'center' }}>
                   <th colSpan={isRMG ? 2 : 4} style={styles.thGroup}>Fabric Specifications</th>
-                  <th colSpan={3} style={styles.thGroup}>Design & Color Variant</th>
+                  <th colSpan={3} style={styles.thGroup}>Design Variant (Color Optional)</th>
                   <th colSpan={isJobWork ? 1 : 4} style={styles.thGroup}>{isJobWork ? 'Quantity' : 'Pricing & GST (₹)'}</th>
                   <th colSpan={3} style={styles.thGroup}>Deductions</th>
                   <th style={{ ...styles.thGroup, background: '#059669', borderRight: 'none' }}>Final</th>
@@ -815,16 +822,16 @@ function GRNEntryForm() {
                   {!isRMG && <th style={{ ...styles.thSub, width: '70px' }}>Fold</th>}
                   {isRMG && <th style={{ ...styles.thSub, width: '90px', color: '#38bdf8' }}>Size</th>}
                   <th style={{ ...styles.thSub, width: '90px' }}>Design No</th>
-                  <th style={{ ...styles.thSub, width: '100px', color: '#fbbf24' }}>Color</th>
-                  <th style={{ ...styles.thSub, width: '150px' }}>Image Upload / View</th>
+                  <th style={{ ...styles.thSub, width: '100px' }}>Color (Opt)</th>
+                  <th style={{ ...styles.thSub, width: '150px' }}>Image (Opt)</th>
                   {!isJobWork && <th style={{ ...styles.thSub, width: '80px', color: '#fbbf24' }}>Rate</th>}
                   {!isJobWork && <th style={{ ...styles.thSub, width: '70px', color: '#38bdf8' }}>GST %</th>}
-                  {!isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Total Mtr</th>}
-                  {isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Total Pcs</th>}
+                  {!isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Total Mtr *</th>}
+                  {isRMG && <th style={{ ...styles.thSub, width: '90px' }}>Total Pcs *</th>}
                   {!isJobWork && <th style={{ ...styles.thSub, width: '100px' }}>Total Val</th>}
                   <th style={{ ...styles.thSub, width: '70px' }}>Dmg</th>
                   <th style={{ ...styles.thSub, width: '70px' }}>Short</th>
-                  <th style={{ ...styles.thSub, width: '110px' }}>Return</th>
+                  <th style={{ ...styles.thSub, width: '90px' }}>Return</th>
                   <th style={{ ...styles.thSub, width: '90px', background: '#059669', color: 'white', borderRight: 'none' }}>Net Stock</th>
                 </tr>
               </thead>
@@ -838,13 +845,13 @@ function GRNEntryForm() {
                   const netStock = qty - (Number(item.damage) || 0) - (Number(item.shortage) || 0) - (Number(item.returnEntry) || 0);
                   return (
                     <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', background: idx % 2 === 0 ? '#f8fafc' : 'white' }}>
-                      <td style={styles.td}><input type="text" value={item.itemDetails} onChange={(e) => handleItemChange(idx, 'itemDetails', e.target.value)} style={styles.tblInput} /></td>
+                      <td style={styles.td}><input type="text" placeholder="Item" value={item.itemDetails} onChange={(e) => handleItemChange(idx, 'itemDetails', e.target.value)} style={styles.tblInput} /></td>
                       {!isRMG && <td style={styles.td}><input type="text" value={item.quality} onChange={(e) => handleItemChange(idx, 'quality', e.target.value)} style={styles.tblInput} /></td>}
                       {!isRMG && <td style={styles.td}><input type="text" value={item.width} onChange={(e) => handleItemChange(idx, 'width', e.target.value)} style={styles.tblInput} /></td>}
                       {!isRMG && <td style={styles.td}><input type="text" value={item.meterFold} onChange={(e) => handleItemChange(idx, 'meterFold', e.target.value)} style={styles.tblInput} /></td>}
                       {isRMG && <td style={styles.td}><input type="text" value={item.sizeDetails} onChange={(e) => handleItemChange(idx, 'sizeDetails', e.target.value)} style={styles.tblInput} /></td>}
                       <td style={styles.td}><input type="text" value={item.designNo} onChange={(e) => handleItemChange(idx, 'designNo', e.target.value)} style={styles.tblInput} /></td>
-                      <td style={styles.td}><input type="text" placeholder="Color" value={item.color} onChange={(e) => handleItemChange(idx, 'color', e.target.value)} style={{ ...styles.tblInput, borderColor: '#f59e0b', background: '#fffbeb' }} /></td>
+                      <td style={styles.td}><input type="text" placeholder="Optional" value={item.color} onChange={(e) => handleItemChange(idx, 'color', e.target.value)} style={styles.tblInput} /></td>
                       <td style={styles.td}>
                         <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                           <input type="file" accept="image/*" onChange={(e) => handleFileChange(idx, e.target.files ? e.target.files[0] : null)} style={{ width: '100px', fontSize: '10px' }} />
@@ -872,10 +879,7 @@ function GRNEntryForm() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '12px' }}>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button type="button" onClick={handleAddItem} style={styles.secondaryBtn}>+ Add New Item Row</button>
-              <button type="button" onClick={handleAddColorVariant} style={styles.secondaryBtn}>🎨 + Add Color Row</button>
-            </div>
+            <button type="button" onClick={handleAddItem} style={styles.secondaryBtn}>+ Add Row</button>
             {!isJobWork && <div style={{ fontSize: '16px', color: '#0f172a' }}>Grand Total (with GST): <strong style={{ color: '#dc2626' }}>₹ {grandTotal.toFixed(2)}</strong></div>}
             <button type="button" onClick={handleSaveGRN} disabled={saving} style={styles.successBtn}>{saving ? 'Saving...' : '💾 Save & Update Stock'}</button>
           </div>
@@ -936,7 +940,7 @@ function CuttingEntryModule() {
 
   const handleSaveBatch = async () => {
     const validFabrics = selectedFabrics.filter(f => f.stockId && f.issueMeters);
-    if (!batchCode) return alert("Please Generate Code first!");
+    const activeBatch = batchCode || `CUT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     if (validFabrics.length === 0) return alert("Please select at least one fabric!");
     const finalModel = modelSelection === 'NEW' ? customModel : modelSelection;
     if (!finalModel) return alert("Please select a Model Name!");
@@ -946,13 +950,13 @@ function CuttingEntryModule() {
       const totalPieces = sizes.reduce((sum, s) => sum + (Number(s.pieces) || 0), 0);
 
       const { error: batchErr } = await supabase.from('pommys_cutting_batches').insert([{
-        batch_code: batchCode, selected_fabrics_json: validFabrics, product_model: finalModel,
-        size_pieces_json: sizes, total_pieces: totalPieces, end_bit_meters: Number(endBits)
+        batch_code: activeBatch, selected_fabrics_json: validFabrics, product_model: finalModel,
+        size_pieces_json: sizes, total_pieces: totalPieces, end_bit_meters: Number(endBits) || 0
       }]);
       if (batchErr) throw batchErr;
 
       const { error: wipErr } = await supabase.from('pommys_production_wip').insert([{
-        batch_code: batchCode, model_name: finalModel, total_pieces: totalPieces, current_status: 'Cutting'
+        batch_code: activeBatch, model_name: finalModel, total_pieces: totalPieces, current_status: 'Cutting'
       }]);
       if (wipErr) throw wipErr;
 
@@ -967,7 +971,7 @@ function CuttingEntryModule() {
           await supabase.from('pommys_fabric_stock').update({ available_meters: newAvailable }).eq('id', stockObj.id);
         }
       }
-      alert(`🎉 Batch ${batchCode} saved successfully & sent to WIP!`);
+      alert(`🎉 Batch ${activeBatch} saved & sent to WIP!`);
       setSelectedFabrics([{ stockId: '', issueMeters: '' }]);
       setBatchCode('');
       setModelSelection('');
@@ -986,17 +990,20 @@ function CuttingEntryModule() {
     <div style={styles.card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
         <h3 style={{ margin: 0, color: '#0f172a', fontSize: '17px' }}>✂️ Fabric Issue & Cutting</h3>
-        <button type="button" onClick={handleGenerateCode} style={styles.primaryBtn} disabled={!isFabricSelected}>Generate Batch Code ➡️</button>
+        <button type="button" onClick={handleGenerateCode} style={styles.secondaryBtn} disabled={!isFabricSelected}>
+          {batchCode ? `Batch: ${batchCode}` : 'Auto Batch Code'}
+        </button>
       </div>
-      {batchCode && <div style={{ background: '#dcfce7', color: '#166534', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontWeight: 'bold' }}>✓ Batch "{batchCode}" generated!</div>}
       <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
-        <label style={styles.label}>Select from Godown Stock (Multi-Fabric Support):</label>
+        <label style={styles.label}>1. Select Fabric from Godown Stock:</label>
         {selectedFabrics.map((fab, idx) => (
           <div key={idx} style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
             <select value={fab.stockId} onChange={(e) => handleFabricChange(idx, 'stockId', e.target.value)} style={{ ...styles.input, flex: '2 1 220px' }}>
-              <option value="">-- Search Design & Color --</option>
+              <option value="">-- Select Fabric / Design --</option>
               {stockList.map(stock => (
-                <option key={stock.id} value={stock.id}>Design: {stock.design_no} | Color: {stock.color} | Avail: {stock.available_meters} M</option>
+                <option key={stock.id} value={stock.id}>
+                  {stock.item_name || 'Fabric'} | Design: {stock.design_no || '-'} {stock.color && stock.color !== '-' ? `(${stock.color})` : ''} — Avail: {stock.available_meters} M
+                </option>
               ))}
             </select>
             <input type="number" placeholder="Issue Meters" value={fab.issueMeters} onChange={(e) => handleFabricChange(idx, 'issueMeters', e.target.value)} style={{ ...styles.input, flex: '1 1 130px' }} disabled={!fab.stockId} />
@@ -1006,9 +1013,8 @@ function CuttingEntryModule() {
         <button type="button" onClick={handleAddFabricRow} style={{ ...styles.secondaryBtn, marginTop: '8px' }}>+ Add Another Fabric</button>
       </div>
       <div style={{ opacity: isFabricSelected ? 1 : 0.5, pointerEvents: isFabricSelected ? 'auto' : 'none' }}>
-        <h4 style={{ color: '#334155', marginBottom: '12px' }}>Cutting Details</h4>
         <div style={{ marginBottom: '18px', maxWidth: '420px' }}>
-          <label style={styles.label}>Model Name:</label>
+          <label style={styles.label}>2. Model Name *</label>
           <select value={modelSelection} onChange={(e) => setModelSelection(e.target.value)} style={{ ...styles.input, marginBottom: '10px' }}>
             <option value="">-- Select Model --</option>
             {predefinedModels.map(m => <option key={m} value={m}>{m}</option>)}
@@ -1017,19 +1023,19 @@ function CuttingEntryModule() {
           {modelSelection === 'NEW' && <input type="text" placeholder="Enter New Model Name" value={customModel} onChange={(e) => setCustomModel(e.target.value)} style={{ ...styles.input, borderColor: '#3b82f6' }} />}
         </div>
         <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', marginBottom: '18px' }}>
-          <label style={styles.label}>Size-wise Cutting & Consumption:</label>
+          <label style={styles.label}>3. Size & Pieces *</label>
           {sizes.map((s, idx) => (
             <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '10px' }}>
-              <input type="text" placeholder="Size (L, XL)" value={s.size} onChange={(e) => handleSizeChange(idx, 'size', e.target.value)} style={styles.input} />
-              <input type="number" placeholder="Pieces" value={s.pieces} onChange={(e) => handleSizeChange(idx, 'pieces', e.target.value)} style={styles.input} />
-              <input type="number" placeholder="Consumption (M/Pc)" value={s.consumption} onChange={(e) => handleSizeChange(idx, 'consumption', e.target.value)} style={{ ...styles.input, borderColor: '#3b82f6' }} />
+              <input type="text" placeholder="Size (L, XL / Free)" value={s.size} onChange={(e) => handleSizeChange(idx, 'size', e.target.value)} style={styles.input} />
+              <input type="number" placeholder="Pieces *" value={s.pieces} onChange={(e) => handleSizeChange(idx, 'pieces', e.target.value)} style={styles.input} />
+              <input type="number" placeholder="Avg Mtr/Pc (Opt)" value={s.consumption} onChange={(e) => handleSizeChange(idx, 'consumption', e.target.value)} style={styles.input} />
             </div>
           ))}
           <button type="button" onClick={handleAddSize} style={styles.secondaryBtn}>+ Add Size</button>
         </div>
         <div style={{ borderTop: '2px solid #f1f5f9', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ fontWeight: 'bold', color: '#dc2626', fontSize: '13px' }}>End Bits (Meters):</label>
+            <label style={{ fontWeight: 'bold', color: '#475569', fontSize: '13px' }}>End Bits (Opt):</label>
             <input type="number" placeholder="Meters" value={endBits} onChange={(e) => setEndBits(e.target.value)} style={{ ...styles.input, width: '120px' }} />
           </div>
           <button type="button" onClick={handleSaveBatch} disabled={saving} style={styles.successBtn}>{saving ? 'Saving...' : '💾 Save Batch & Send to WIP'}</button>
@@ -1039,7 +1045,7 @@ function CuttingEntryModule() {
   );
 }
 
-// 5. Production WIP Tracking (Supports Full or Partial Piece Movement)
+// 5. Production WIP Tracking (Full or Partial Piece Movement)
 function ProductionTracking() {
   const [wipBatches, setWipBatches] = useState<any[]>([]);
   const [moveQtyMap, setMoveQtyMap] = useState<Record<number, string>>({});
@@ -1070,13 +1076,13 @@ function ProductionTracking() {
     }
 
     if (pcsToMove < totalPcs) {
-      // Partial batch move: keep remaining pieces in current WIP stage, send moved pieces to next stage
       const remaining = totalPcs - pcsToMove;
       await supabase.from('pommys_production_wip').update({ total_pieces: remaining }).eq('id', batch.id);
       if (newStatus === 'Ready Stock') {
         await supabase.from('pommys_ready_stock').insert([{
           batch_code: `${batch.batch_code}-P`,
           model_name: batch.model_name,
+          color: '-',
           ready_pieces: pcsToMove
         }]);
       } else {
@@ -1089,12 +1095,12 @@ function ProductionTracking() {
       }
       alert(`✅ ${pcsToMove} pcs moved to ${newStatus}; ${remaining} pcs remain in ${batch.current_status}.`);
     } else {
-      // Full batch move
       await supabase.from('pommys_production_wip').update({ current_status: newStatus }).eq('id', batch.id);
       if (newStatus === 'Ready Stock') {
         await supabase.from('pommys_ready_stock').insert([{
           batch_code: batch.batch_code,
           model_name: batch.model_name,
+          color: '-',
           ready_pieces: totalPcs
         }]);
         alert(`🎉 Batch ${batch.batch_code} (${totalPcs} pcs) moved to Ready Stock!`);
@@ -1107,7 +1113,7 @@ function ProductionTracking() {
 
   return (
     <div style={styles.card}>
-      <h3 style={{ margin: '0 0 10px 0', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', fontSize: '17px' }}>🏭 Live Production Tracking (Full & Partial WIP)</h3>
+      <h3 style={{ margin: '0 0 10px 0', color: '#0f172a', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', fontSize: '17px' }}>🏭 Live Production Tracking (WIP)</h3>
       <p style={{ fontSize: '12px', color: '#64748b', marginTop: 0 }}>
         முழு பீஸ்களையும் நகர்த்த Move Qty காலியாக விடலாம்; பகுதி பீஸ்களை மட்டும் நகர்த்த எண்ணிக்கையை உள்ளிடலாம்.
       </p>
@@ -1119,7 +1125,7 @@ function ProductionTracking() {
               <th style={styles.thSub}>Model</th>
               <th style={styles.thSub}>Total Pcs</th>
               <th style={styles.thSub}>Current Status</th>
-              <th style={styles.thSub}>Partial Pcs</th>
+              <th style={styles.thSub}>Partial Pcs (Opt)</th>
               <th style={styles.thSub}>Action</th>
             </tr>
           </thead>
@@ -1139,7 +1145,7 @@ function ProductionTracking() {
                   <td style={styles.td}>
                     <input
                       type="number"
-                      placeholder={`Max ${batch.total_pieces}`}
+                      placeholder={`All (${batch.total_pieces})`}
                       value={moveQtyMap[batch.id] || ''}
                       onChange={(e) => setMoveQtyMap(prev => ({ ...prev, [batch.id]: e.target.value }))}
                       style={{ ...styles.tblInput, width: '95px' }}
@@ -1158,7 +1164,7 @@ function ProductionTracking() {
   );
 }
 
-// 6. Store Room & Trims Module (Persisted in Supabase with fallback)
+// 6. Store Room & Trims Module
 function StoreRoomModule() {
   const [trims, setTrims] = useState<any[]>([]);
   const [itemName, setItemName] = useState('');
@@ -1171,7 +1177,7 @@ function StoreRoomModule() {
       setTrims(data);
     } else {
       setTrims([
-        { id: 1, item_name: 'Lace Border (White/Color)', unit: 'Mtr', qty: 120, reorder_level: 30 },
+        { id: 1, item_name: 'Lace Border', unit: 'Mtr', qty: 120, reorder_level: 30 },
         { id: 2, item_name: 'Elastic Band (1 inch)', unit: 'Roll', qty: 45, reorder_level: 15 }
       ]);
     }
@@ -1228,7 +1234,7 @@ function StoreRoomModule() {
   );
 }
 
-// 7. Ready Stock Godown + Retail Showroom Stock Transfer & Branch-Wise Bifurcation
+// 7. Ready Stock Godown + Retail Showroom Stock Transfer & Bifurcation
 function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
   const [readyList, setReadyList] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
@@ -1289,7 +1295,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
     try {
       const generatedChallan = challanNo.trim() || `TRF-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      // 1. Insert transfer record for Showroom bifurcation
       const { error: insErr } = await supabase.from('pommys_showroom_transfers').insert([{
         challan_no: generatedChallan,
         transfer_date: transferDate || new Date().toISOString().slice(0, 10),
@@ -1298,13 +1303,12 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         design_no: stockRow.design_no || '-',
         color: stockRow.color || '-',
         model_name: stockRow.model_name || '-',
-        size_details: sizeNote.trim() || 'Assorted',
+        size_details: sizeNote.trim() || '-',
         transferred_pieces: pcsToSend,
         status: 'Transferred to Showroom'
       }]);
       if (insErr) throw insErr;
 
-      // 2. Deduct transferred pieces from Central Ready Stock Godown
       const remainingGodownPcs = Math.max(0, availablePcs - pcsToSend);
       const { error: updErr } = await supabase
         .from('pommys_ready_stock')
@@ -1312,7 +1316,7 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         .eq('id', stockRow.id);
       if (updErr) throw updErr;
 
-      alert(`✅ ${pcsToSend} pcs transferred to ${targetShowroom} Showroom (Challan: ${generatedChallan})!`);
+      alert(`✅ ${pcsToSend} pcs transferred to ${targetShowroom} Showroom!`);
       setTransferQty('');
       setChallanNo('');
       setSizeNote('');
@@ -1345,7 +1349,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
   const totalGodownPcs = readyList.reduce((sum, r) => sum + (Number(r.ready_pieces) || 0), 0);
   const totalShowroomPcs = transfers.reduce((sum, t) => sum + (Number(t.transferred_pieces) || 0), 0);
 
-  // Bifurcate stock by Showroom
   const showroomTotals = showrooms.map(branch => {
     const branchRows = transfers.filter(t => t.showroom_name === branch);
     const totalPcs = branchRows.reduce((s, r) => s + (Number(r.transferred_pieces) || 0), 0);
@@ -1354,7 +1357,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Top Stock Bifurcation Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
         <div style={{ ...styles.card, borderTop: '4px solid #059669' }}>
           <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>CENTRAL GODOWN READY STOCK</div>
@@ -1370,37 +1372,36 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         </div>
       </div>
 
-      {/* Showroom Stock Transfer Form */}
       <div style={styles.card}>
-        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🚚 Transfer Ready Goods to Retail Showroom</h4>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🚚 Transfer Ready Goods to Retail Showroom (Low Entry)</h4>
         <form onSubmit={handleTransferToShowroom} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
           <div>
-            <label style={styles.label}>Select Ready Stock Batch</label>
+            <label style={styles.label}>1. Select Ready Stock Batch *</label>
             <select value={selectedStockId} onChange={(e) => setSelectedStockId(e.target.value)} style={styles.input} required>
               <option value="">-- Choose Batch --</option>
               {readyList.map(r => (
                 <option key={r.id} value={r.id}>
-                  {r.batch_code} | {r.model_name} ({r.color || 'Assorted'}) — {r.ready_pieces} Pcs
+                  {r.batch_code} | {r.model_name} {r.color && r.color !== '-' ? `(${r.color})` : ''} — {r.ready_pieces} Pcs
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label style={styles.label}>Target Retail Showroom</label>
+            <label style={styles.label}>2. Target Retail Showroom *</label>
             <select value={targetShowroom} onChange={(e) => setTargetShowroom(e.target.value)} style={styles.input}>
               {showrooms.map(sr => <option key={sr} value={sr}>{sr}</option>)}
             </select>
           </div>
           <div>
-            <label style={styles.label}>Transfer Pieces</label>
+            <label style={styles.label}>3. Transfer Pieces *</label>
             <input type="number" placeholder="Pieces to Send" value={transferQty} onChange={(e) => setTransferQty(e.target.value)} style={styles.input} required />
           </div>
           <div>
-            <label style={styles.label}>Size / Color Note</label>
-            <input type="text" placeholder="Ex: L, XL / Maroon" value={sizeNote} onChange={(e) => setSizeNote(e.target.value)} style={styles.input} />
+            <label style={styles.label}>Size / Note (Optional)</label>
+            <input type="text" placeholder="Optional" value={sizeNote} onChange={(e) => setSizeNote(e.target.value)} style={styles.input} />
           </div>
           <div>
-            <label style={styles.label}>Challan No.</label>
+            <label style={styles.label}>Challan No. (Optional)</label>
             <input type="text" placeholder="Auto if blank" value={challanNo} onChange={(e) => setChallanNo(e.target.value)} style={styles.input} />
           </div>
           <div>
@@ -1428,7 +1429,6 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         </div>
       </div>
 
-      {/* Branch-Wise Showroom Stock Bifurcation Grid */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🏬 Showroom-Wise Stock Bifurcation (Branch Stock)</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: '10px' }}>
@@ -1450,16 +1450,15 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         </div>
       </div>
 
-      {/* Central Godown Ready Stock Table */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>👕 Central Godown Ready Stock</h4>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', minWidth: '520px', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <table style={{ width: '100%', minWidth: '500px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#0f172a', color: 'white' }}>
                 <th style={styles.thSub}>Batch Code</th>
                 <th style={styles.thSub}>Model</th>
-                <th style={styles.thSub}>Color</th>
+                <th style={styles.thSub}>Color (Opt)</th>
                 <th style={styles.thSub}>Godown Pcs</th>
                 {canDelete && <th style={{ ...styles.thSub, width: '110px', textAlign: 'center' }}>Action</th>}
               </tr>
@@ -1471,7 +1470,7 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
                 <tr key={r.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                   <td style={styles.td}><strong>{r.batch_code}</strong></td>
                   <td style={styles.td}>{r.model_name}</td>
-                  <td style={styles.td}>{r.color || 'Assorted'}</td>
+                  <td style={styles.td}>{r.color || '-'}</td>
                   <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}</td>
                   {canDelete && (
                     <td style={{ ...styles.td, textAlign: 'center' }}>
@@ -1501,18 +1500,17 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         </div>
       </div>
 
-      {/* Showroom Transfer Challan Log */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>📄 Showroom Transfer Challan Register</h4>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', minWidth: '640px', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <table style={{ width: '100%', minWidth: '620px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#1e293b', color: 'white' }}>
                 <th style={styles.thSub}>Challan No</th>
                 <th style={styles.thSub}>Date</th>
                 <th style={styles.thSub}>Showroom</th>
                 <th style={styles.thSub}>Batch / Model</th>
-                <th style={styles.thSub}>Size / Color</th>
+                <th style={styles.thSub}>Note / Color</th>
                 <th style={styles.thSub}>Sent Pcs</th>
               </tr>
             </thead>
@@ -1525,7 +1523,7 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
                   <td style={styles.td}>{t.transfer_date || '-'}</td>
                   <td style={{ ...styles.td, fontWeight: 'bold', color: '#0369a1' }}>{t.showroom_name}</td>
                   <td style={styles.td}>{t.batch_code} — {t.model_name}</td>
-                  <td style={styles.td}>{t.size_details || '-'} ({t.color || '-'})</td>
+                  <td style={styles.td}>{t.size_details || '-'} {t.color && t.color !== '-' ? `(${t.color})` : ''}</td>
                   <td style={{ ...styles.td, fontWeight: 'bold', color: '#059669' }}>{t.transferred_pieces}</td>
                 </tr>
               ))}
@@ -1562,7 +1560,9 @@ function SalesmanCatalogModule({ hideCostRate }: { hideCostRate: boolean }) {
               <div style={{ height: '160px', background: '#e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px', color: '#64748b', fontSize: '12px' }}>No Image</div>
             )}
             <div style={{ fontWeight: 'bold', color: '#0f172a' }}>Design: {d.design_no || '-'}</div>
-            <div style={{ fontSize: '12px', color: '#475569' }}>Item: {d.item_name || '-'} | Color: {d.color || '-'}</div>
+            <div style={{ fontSize: '12px', color: '#475569' }}>
+              Item: {d.item_name || '-'}{d.color && d.color !== '-' ? ` | Color: ${d.color}` : ''}
+            </div>
             {!hideCostRate && (
               <div style={{ fontSize: '13px', color: '#059669', fontWeight: 'bold', marginTop: '6px' }}>Base Rate: ₹{d.rate_per_meter || 0}</div>
             )}
@@ -1600,7 +1600,7 @@ function CostingRateFixerModule() {
   );
 }
 
-// 10. Tailor Ledger & Jobwork Module (Persisted in Supabase with fallback)
+// 10. Tailor Ledger & Jobwork Module
 function TailorLedgerModule() {
   const [entries, setEntries] = useState<any[]>([]);
   const [tailor, setTailor] = useState('');
@@ -2118,9 +2118,9 @@ function YearClosingBackupModule() {
   );
 }
 
-// 13. Master Reports with Godown, Showroom Bifurcation & Supplier History
+// 13. Master Reports with Godown, Showroom Bifurcation, Supplier History & CSV Export
 function ReportsModule() {
-  const [tab, setTab] = useState<'godown' | 'showrooms' | 'history'>('godown');
+  const [tab, setTab] = useState<'showrooms' | 'godown' | 'history'>('showrooms');
   const [godownStock, setGodownStock] = useState<any[]>([]);
   const [readyStock, setReadyStock] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
@@ -2145,7 +2145,7 @@ function ReportsModule() {
   const fetchShowroomBifurcation = async () => {
     const { data: ready } = await supabase.from('pommys_ready_stock').select('*').order('id', { ascending: false });
     const { data: trf } = await supabase.from('pommys_showroom_transfers').select('*').order('id', { ascending: false });
-    if (ready) setReadyStock(ready);
+    if (ready) setReadyStock(ready.filter((r: any) => Number(r.ready_pieces) > 0));
     if (trf) setTransfers(trf);
   };
 
@@ -2160,6 +2160,22 @@ function ReportsModule() {
       }));
       setSupplierHistory(combined);
     }
+  };
+
+  const exportStockCsv = () => {
+    const rows = [
+      ['Location / Showroom', 'Challan / Batch', 'Model', 'Color (Optional)', 'Pieces'],
+      ...readyStock.map(r => ['Central Godown', r.batch_code || '-', r.model_name || '-', r.color || '-', String(r.ready_pieces || 0)]),
+      ...transfers.map(t => [t.showroom_name || '-', `${t.challan_no || '-'} (${t.batch_code || '-'})`, t.model_name || '-', t.color || '-', String(t.transferred_pieces || 0)])
+    ];
+    const csvContent = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pommys-godown-showroom-stock-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const filteredHistory = supplierHistory.filter(bill => {
@@ -2186,32 +2202,18 @@ function ReportsModule() {
 
   return (
     <div style={styles.card}>
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px', flexWrap: 'wrap' }}>
-        <button type="button" onClick={() => setTab('godown')} style={{ ...styles.secondaryBtn, background: tab === 'godown' ? '#1e293b' : 'transparent', color: tab === 'godown' ? 'white' : '#475569' }}>📦 Fabric Godown Stock</button>
-        <button type="button" onClick={() => setTab('showrooms')} style={{ ...styles.secondaryBtn, background: tab === 'showrooms' ? '#1e293b' : 'transparent', color: tab === 'showrooms' ? 'white' : '#475569' }}>🏬 Godown & Showroom Bifurcation</button>
-        <button type="button" onClick={() => setTab('history')} style={{ ...styles.secondaryBtn, background: tab === 'history' ? '#1e293b' : 'transparent', color: tab === 'history' ? 'white' : '#475569' }}>📅 Supplier Date-wise History</button>
-      </div>
-
-      {tab === 'godown' && (
-        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <table style={{ width: '100%', minWidth: '540px', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead><tr style={{ background: '#0f172a', color: 'white' }}>
-              <th style={styles.thSub}>Item</th><th style={styles.thSub}>Design</th><th style={styles.thSub}>Color</th><th style={styles.thSub}>Design Photo</th><th style={styles.thSub}>Available (M)</th>
-            </tr></thead>
-            <tbody>
-              {godownStock.map((s, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={styles.td}>{s.item_name}</td><td style={styles.td}>{s.design_no}</td><td style={styles.td}>{s.color}</td>
-                  <td style={styles.td}>
-                    {s.image_url ? <button type="button" onClick={() => setSelectedImage(s.image_url)} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>View Photo</button> : 'No Image'}
-                  </td>
-                  <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{s.available_meters}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => setTab('showrooms')} style={{ ...styles.secondaryBtn, background: tab === 'showrooms' ? '#1e293b' : 'transparent', color: tab === 'showrooms' ? 'white' : '#475569' }}>🏬 Godown & Showroom Stock</button>
+          <button type="button" onClick={() => setTab('godown')} style={{ ...styles.secondaryBtn, background: tab === 'godown' ? '#1e293b' : 'transparent', color: tab === 'godown' ? 'white' : '#475569' }}>📦 Fabric Godown Stock</button>
+          <button type="button" onClick={() => setTab('history')} style={{ ...styles.secondaryBtn, background: tab === 'history' ? '#1e293b' : 'transparent', color: tab === 'history' ? 'white' : '#475569' }}>📅 Supplier History</button>
         </div>
-      )}
+        {tab === 'showrooms' && (
+          <button type="button" onClick={exportStockCsv} style={{ background: '#059669', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+            ⬇️ Export Excel (CSV)
+          </button>
+        )}
+      </div>
 
       {tab === 'showrooms' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -2233,14 +2235,15 @@ function ReportsModule() {
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <table style={{ width: '100%', minWidth: '520px', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead><tr style={{ background: '#0f172a', color: 'white' }}>
-                <th style={styles.thSub}>Location / Showroom</th><th style={styles.thSub}>Challan / Batch</th><th style={styles.thSub}>Model / Color</th><th style={styles.thSub}>Pieces</th>
+                <th style={styles.thSub}>Location / Showroom</th><th style={styles.thSub}>Challan / Batch</th><th style={styles.thSub}>Model</th><th style={styles.thSub}>Color (Opt)</th><th style={styles.thSub}>Pieces</th>
               </tr></thead>
               <tbody>
                 {readyStock.map((r, i) => (
                   <tr key={`g-${i}`} style={{ borderBottom: '1px solid #e2e8f0' }}>
                     <td style={styles.td}><strong>Central Godown</strong></td>
                     <td style={styles.td}>{r.batch_code}</td>
-                    <td style={styles.td}>{r.model_name} ({r.color || 'Assorted'})</td>
+                    <td style={styles.td}>{r.model_name}</td>
+                    <td style={styles.td}>{r.color || '-'}</td>
                     <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}</td>
                   </tr>
                 ))}
@@ -2248,13 +2251,35 @@ function ReportsModule() {
                   <tr key={`s-${i}`} style={{ borderBottom: '1px solid #e2e8f0' }}>
                     <td style={styles.td}><strong style={{ color: '#0369a1' }}>{t.showroom_name}</strong></td>
                     <td style={styles.td}>{t.challan_no} ({t.batch_code})</td>
-                    <td style={styles.td}>{t.model_name} ({t.color || '-'})</td>
+                    <td style={styles.td}>{t.model_name}</td>
+                    <td style={styles.td}>{t.color || '-'}</td>
                     <td style={{ ...styles.td, color: '#0284c7', fontWeight: 'bold' }}>{t.transferred_pieces}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {tab === 'godown' && (
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table style={{ width: '100%', minWidth: '540px', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead><tr style={{ background: '#0f172a', color: 'white' }}>
+              <th style={styles.thSub}>Item</th><th style={styles.thSub}>Design</th><th style={styles.thSub}>Color (Opt)</th><th style={styles.thSub}>Design Photo</th><th style={styles.thSub}>Available (M)</th>
+            </tr></thead>
+            <tbody>
+              {godownStock.map((s, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={styles.td}>{s.item_name}</td><td style={styles.td}>{s.design_no}</td><td style={styles.td}>{s.color || '-'}</td>
+                  <td style={styles.td}>
+                    {s.image_url ? <button type="button" onClick={() => setSelectedImage(s.image_url)} style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>View Photo</button> : '-'}
+                  </td>
+                  <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{s.available_meters}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -2290,12 +2315,12 @@ function ReportsModule() {
                 <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                   <table style={{ width: '100%', minWidth: '580px', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead><tr style={{ background: '#e2e8f0', color: '#334155' }}>
-                      <th style={styles.thSub}>Item</th><th style={styles.thSub}>Design</th><th style={styles.thSub}>Color</th><th style={styles.thSub}>Rate</th><th style={styles.thSub}>GST %</th><th style={styles.thSub}>Net Qty</th><th style={styles.thSub}>Photo</th>
+                      <th style={styles.thSub}>Item</th><th style={styles.thSub}>Design</th><th style={styles.thSub}>Color (Opt)</th><th style={styles.thSub}>Rate</th><th style={styles.thSub}>GST %</th><th style={styles.thSub}>Net Qty</th><th style={styles.thSub}>Photo</th>
                     </tr></thead>
                     <tbody>
                       {bill.pommys_fabric_stock?.map((st: any, idx: number) => (
                         <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={styles.td}>{st.item_name}</td><td style={styles.td}>{st.design_no}</td><td style={styles.td}>{st.color}</td>
+                          <td style={styles.td}>{st.item_name}</td><td style={styles.td}>{st.design_no}</td><td style={styles.td}>{st.color || '-'}</td>
                           <td style={styles.td}>₹{st.rate_per_meter}</td><td style={styles.td}>{st.gst_percentage}%</td>
                           <td style={styles.td}>{st.net_meters}</td>
                           <td style={styles.td}>
