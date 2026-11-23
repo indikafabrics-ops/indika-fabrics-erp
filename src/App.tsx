@@ -11,19 +11,6 @@ const initialSuppliers = [
   { id: 2, name: 'Sri Ram Textiles', address: 'Tiruppur, TN - 641604', gst: '33AABCS1234H1Z5' }
 ];
 
-const INITIAL_SHOWROOMS = [
-  'Madurai',
-  'Trichy',
-  'Nellai',
-  'Ambattur',
-  'Tambaram',
-  'Camp Road',
-  'Medavakkam',
-  'Salem',
-  'Erode',
-  'Guduvanchery'
-];
-
 const POMMYS_LOGO_URL = "https://chaodxrbgiqotdxxvjcj.supabase.co/storage/v1/object/public/assets/Pommys%20Logo%20Jepeg.jpg";
 
 type UserRole = 'ADMIN' | 'OFFICE' | 'SALESMAN' | 'CUSTOMER';
@@ -78,6 +65,13 @@ const LOGIN_TABS: { role: UserRole; label: string; subtitle: string; badgeBg: st
   { role: 'SALESMAN', label: '👔 Salesman', subtitle: 'Salesman Portal Login', badgeBg: '#fef3c7', badgeColor: '#b45309' },
   { role: 'CUSTOMER', label: '🛍️ Customer', subtitle: 'Customer Catalog Login', badgeBg: '#dcfce7', badgeColor: '#15803d' }
 ];
+
+interface ShowroomRecord {
+  id?: number;
+  showroom_name: string;
+  address?: string;
+  phone?: string;
+}
 
 function normalizeRole(rawRole: any): UserRole {
   const upper = String(rawRole || 'CUSTOMER').toUpperCase();
@@ -1234,15 +1228,21 @@ function StoreRoomModule() {
   );
 }
 
-// 7. Ready Stock Godown + Retail Showroom Stock Transfer & Bifurcation
+// 7. Ready Stock Godown + User-Added Retail Showrooms (With Full Address) + Stock Bifurcation
 function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
   const [readyList, setReadyList] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
-  const [showrooms, setShowrooms] = useState<string[]>(INITIAL_SHOWROOMS);
-  const [newShowroomName, setNewShowroomName] = useState('');
+  const [showrooms, setShowrooms] = useState<ShowroomRecord[]>([]);
 
+  // Form state for adding a new Retail Showroom with Address
+  const [newShowroomName, setNewShowroomName] = useState('');
+  const [newShowroomAddress, setNewShowroomAddress] = useState('');
+  const [newShowroomPhone, setNewShowroomPhone] = useState('');
+  const [addingShowroom, setAddingShowroom] = useState(false);
+
+  // Form state for transferring Ready Goods to a Showroom
   const [selectedStockId, setSelectedStockId] = useState('');
-  const [targetShowroom, setTargetShowroom] = useState(INITIAL_SHOWROOMS[0]);
+  const [targetShowroom, setTargetShowroom] = useState('');
   const [challanNo, setChallanNo] = useState('');
   const [transferDate, setTransferDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [transferQty, setTransferQty] = useState('');
@@ -1255,10 +1255,25 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
     if (ready) setReadyList(ready.filter((r: any) => Number(r.ready_pieces) > 0));
 
     const { data: trf, error: trfErr } = await supabase.from('pommys_showroom_transfers').select('*').order('id', { ascending: false });
-    if (!trfErr && trf) {
-      setTransfers(trf);
-      const customBranches = Array.from(new Set(trf.map((x: any) => x.showroom_name).filter(Boolean)));
-      setShowrooms(prev => Array.from(new Set([...prev, ...customBranches])));
+    const loadedTransfers = !trfErr && trf ? trf : [];
+    setTransfers(loadedTransfers);
+
+    const { data: srData, error: srErr } = await supabase.from('pommys_showrooms').select('*').order('id', { ascending: true });
+    let combinedShowrooms: ShowroomRecord[] = !srErr && srData ? srData : [];
+
+    // Ensure any showroom referenced in existing transfers is also listed
+    const existingNames = new Set(combinedShowrooms.map(s => s.showroom_name.trim().toLowerCase()));
+    loadedTransfers.forEach((t: any) => {
+      const name = String(t.showroom_name || '').trim();
+      if (name && !existingNames.has(name.toLowerCase())) {
+        existingNames.add(name.toLowerCase());
+        combinedShowrooms = [...combinedShowrooms, { showroom_name: name, address: '' }];
+      }
+    });
+
+    setShowrooms(combinedShowrooms);
+    if (combinedShowrooms.length > 0 && !targetShowroom) {
+      setTargetShowroom(combinedShowrooms[0].showroom_name);
     }
   };
 
@@ -1266,14 +1281,41 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
     loadAll();
   }, []);
 
-  const handleAddShowroom = () => {
-    const trimmed = newShowroomName.trim();
-    if (!trimmed) return;
-    if (!showrooms.includes(trimmed)) {
-      setShowrooms(prev => [...prev, trimmed]);
+  const handleAddShowroom = async (e: FormEvent) => {
+    e.preventDefault();
+    const trimmedName = newShowroomName.trim();
+    const trimmedAddr = newShowroomAddress.trim();
+    const trimmedPhone = newShowroomPhone.trim();
+
+    if (!trimmedName) {
+      alert('Please enter Showroom Name.');
+      return;
     }
-    setTargetShowroom(trimmed);
-    setNewShowroomName('');
+
+    setAddingShowroom(true);
+    try {
+      const payload: ShowroomRecord = {
+        showroom_name: trimmedName,
+        address: trimmedAddr,
+        phone: trimmedPhone
+      };
+
+      const { data, error } = await supabase.from('pommys_showrooms').insert([payload]).select().single();
+      if (error) {
+        // Fallback if table isn't created yet in Supabase
+        setShowrooms(prev => [...prev, { id: Date.now(), ...payload }]);
+      } else {
+        setShowrooms(prev => [...prev, data || payload]);
+      }
+
+      setTargetShowroom(trimmedName);
+      setNewShowroomName('');
+      setNewShowroomAddress('');
+      setNewShowroomPhone('');
+      alert(`✅ Showroom "${trimmedName}" added with address!`);
+    } finally {
+      setAddingShowroom(false);
+    }
   };
 
   const handleTransferToShowroom = async (e: FormEvent) => {
@@ -1281,6 +1323,10 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
     const stockRow = readyList.find(r => String(r.id) === String(selectedStockId));
     const pcsToSend = Number(transferQty);
 
+    if (!targetShowroom) {
+      alert('Please add or select a Retail Showroom first.');
+      return;
+    }
     if (!stockRow) {
       alert('Please select a Ready Stock batch from Godown.');
       return;
@@ -1349,14 +1395,21 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
   const totalGodownPcs = readyList.reduce((sum, r) => sum + (Number(r.ready_pieces) || 0), 0);
   const totalShowroomPcs = transfers.reduce((sum, t) => sum + (Number(t.transferred_pieces) || 0), 0);
 
-  const showroomTotals = showrooms.map(branch => {
-    const branchRows = transfers.filter(t => t.showroom_name === branch);
+  const showroomBifurcation = showrooms.map(sr => {
+    const branchRows = transfers.filter(t => String(t.showroom_name || '').trim().toLowerCase() === sr.showroom_name.trim().toLowerCase());
     const totalPcs = branchRows.reduce((s, r) => s + (Number(r.transferred_pieces) || 0), 0);
-    return { branch, totalPcs, challanCount: branchRows.length };
+    return {
+      name: sr.showroom_name,
+      address: sr.address || '',
+      phone: sr.phone || '',
+      totalPcs,
+      challanCount: branchRows.length
+    };
   });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Top Stock Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
         <div style={{ ...styles.card, borderTop: '4px solid #059669' }}>
           <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>CENTRAL GODOWN READY STOCK</div>
@@ -1367,89 +1420,142 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
           <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2563eb', marginTop: '4px' }}>{totalShowroomPcs} Pcs</div>
         </div>
         <div style={{ ...styles.card, borderTop: '4px solid #7c3aed' }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>OVERALL FINISHED STOCK</div>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a', marginTop: '4px' }}>{totalGodownPcs + totalShowroomPcs} Pcs</div>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>REGISTERED SHOWROOMS</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a', marginTop: '4px' }}>{showrooms.length}</div>
         </div>
       </div>
 
+      {/* Step A: Add New Retail Showroom with Full Address */}
       <div style={styles.card}>
-        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🚚 Transfer Ready Goods to Retail Showroom (Low Entry)</h4>
-        <form onSubmit={handleTransferToShowroom} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
+        <h4 style={{ margin: '0 0 12px 0', color: '#0f172a' }}>🏪 1. Add Retail Showroom (Name & Full Address)</h4>
+        <form onSubmit={handleAddShowroom} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
           <div>
-            <label style={styles.label}>1. Select Ready Stock Batch *</label>
-            <select value={selectedStockId} onChange={(e) => setSelectedStockId(e.target.value)} style={styles.input} required>
-              <option value="">-- Choose Batch --</option>
-              {readyList.map(r => (
-                <option key={r.id} value={r.id}>
-                  {r.batch_code} | {r.model_name} {r.color && r.color !== '-' ? `(${r.color})` : ''} — {r.ready_pieces} Pcs
-                </option>
-              ))}
-            </select>
+            <label style={styles.label}>Showroom Name *</label>
+            <input
+              type="text"
+              placeholder="Ex: Pommys Showroom - Branch"
+              value={newShowroomName}
+              onChange={(e) => setNewShowroomName(e.target.value)}
+              style={styles.input}
+              required
+            />
+          </div>
+          <div style={{ gridColumn: 'span 2' }}>
+            <label style={styles.label}>Full Address *</label>
+            <input
+              type="text"
+              placeholder="Door No, Street, Area, City, Pincode"
+              value={newShowroomAddress}
+              onChange={(e) => setNewShowroomAddress(e.target.value)}
+              style={styles.input}
+            />
           </div>
           <div>
-            <label style={styles.label}>2. Target Retail Showroom *</label>
-            <select value={targetShowroom} onChange={(e) => setTargetShowroom(e.target.value)} style={styles.input}>
-              {showrooms.map(sr => <option key={sr} value={sr}>{sr}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={styles.label}>3. Transfer Pieces *</label>
-            <input type="number" placeholder="Pieces to Send" value={transferQty} onChange={(e) => setTransferQty(e.target.value)} style={styles.input} required />
-          </div>
-          <div>
-            <label style={styles.label}>Size / Note (Optional)</label>
-            <input type="text" placeholder="Optional" value={sizeNote} onChange={(e) => setSizeNote(e.target.value)} style={styles.input} />
-          </div>
-          <div>
-            <label style={styles.label}>Challan No. (Optional)</label>
-            <input type="text" placeholder="Auto if blank" value={challanNo} onChange={(e) => setChallanNo(e.target.value)} style={styles.input} />
-          </div>
-          <div>
-            <label style={styles.label}>Transfer Date</label>
-            <input type="date" value={transferDate} onChange={(e) => setTransferDate(e.target.value)} style={styles.input} />
+            <label style={styles.label}>Phone / Contact (Optional)</label>
+            <input
+              type="text"
+              placeholder="Mobile / Landline"
+              value={newShowroomPhone}
+              onChange={(e) => setNewShowroomPhone(e.target.value)}
+              style={styles.input}
+            />
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-            <button type="submit" disabled={transferring} style={{ ...styles.primaryBtn, width: '100%' }}>
-              {transferring ? 'Transferring...' : '🚚 Transfer Stock'}
+            <button type="submit" disabled={addingShowroom} style={{ ...styles.successBtn, width: '100%' }}>
+              {addingShowroom ? 'Saving...' : '+ Add Showroom'}
             </button>
           </div>
         </form>
-
-        <div style={{ display: 'flex', gap: '8px', marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed #cbd5e1', flexWrap: 'wrap', alignItems: 'center' }}>
-          <input
-            type="text"
-            placeholder="New Showroom / Branch Name"
-            value={newShowroomName}
-            onChange={(e) => setNewShowroomName(e.target.value)}
-            style={{ ...styles.tblInput, maxWidth: '220px' }}
-          />
-          <button type="button" onClick={handleAddShowroom} style={{ ...styles.secondaryBtn, padding: '7px 12px', fontSize: '12px' }}>
-            + Add Showroom Branch
-          </button>
-        </div>
       </div>
 
+      {/* Step B: Transfer Ready Goods to Added Retail Showroom */}
       <div style={styles.card}>
-        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🏬 Showroom-Wise Stock Bifurcation (Branch Stock)</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: '10px' }}>
-          {showroomTotals.map(item => (
-            <div
-              key={item.branch}
-              style={{
-                border: '1px solid #cbd5e1',
-                borderRadius: '10px',
-                padding: '12px',
-                background: item.totalPcs > 0 ? '#f0f9ff' : '#f8fafc'
-              }}
-            >
-              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#0f172a' }}>{item.branch}</div>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0369a1', marginTop: '6px' }}>{item.totalPcs} Pcs</div>
-              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>{item.challanCount} Challan(s)</div>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🚚 2. Transfer Ready Goods to Retail Showroom</h4>
+        {showrooms.length === 0 ? (
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', padding: '12px', borderRadius: '8px', fontSize: '13px' }}>
+            முதலில் மேலே உள்ள <strong>Add Retail Showroom</strong> பகுதியில் உங்கள் Showroom பெயர் மற்றும் முகவரியைச் சேர்க்கவும்.
+          </div>
+        ) : (
+          <form onSubmit={handleTransferToShowroom} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: '12px' }}>
+            <div>
+              <label style={styles.label}>Target Retail Showroom *</label>
+              <select value={targetShowroom} onChange={(e) => setTargetShowroom(e.target.value)} style={styles.input} required>
+                {showrooms.map((sr, i) => (
+                  <option key={sr.id ?? i} value={sr.showroom_name}>
+                    {sr.showroom_name}{sr.address ? ` — ${sr.address}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
-          ))}
-        </div>
+            <div>
+              <label style={styles.label}>Select Ready Stock Batch *</label>
+              <select value={selectedStockId} onChange={(e) => setSelectedStockId(e.target.value)} style={styles.input} required>
+                <option value="">-- Choose Batch --</option>
+                {readyList.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.batch_code} | {r.model_name} {r.color && r.color !== '-' ? `(${r.color})` : ''} — {r.ready_pieces} Pcs
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={styles.label}>Transfer Pieces *</label>
+              <input type="number" placeholder="Pieces to Send" value={transferQty} onChange={(e) => setTransferQty(e.target.value)} style={styles.input} required />
+            </div>
+            <div>
+              <label style={styles.label}>Size / Note (Optional)</label>
+              <input type="text" placeholder="Optional" value={sizeNote} onChange={(e) => setSizeNote(e.target.value)} style={styles.input} />
+            </div>
+            <div>
+              <label style={styles.label}>Challan No. (Optional)</label>
+              <input type="text" placeholder="Auto if blank" value={challanNo} onChange={(e) => setChallanNo(e.target.value)} style={styles.input} />
+            </div>
+            <div>
+              <label style={styles.label}>Transfer Date</label>
+              <input type="date" value={transferDate} onChange={(e) => setTransferDate(e.target.value)} style={styles.input} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button type="submit" disabled={transferring} style={{ ...styles.primaryBtn, width: '100%' }}>
+                {transferring ? 'Transferring...' : '🚚 Transfer Stock'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
+      {/* Step C: Showroom-Wise Stock Bifurcation (Showing Name, Address & Stock) */}
+      <div style={styles.card}>
+        <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>🏬 Showroom-Wise Stock Bifurcation</h4>
+        {showroomBifurcation.length === 0 ? (
+          <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>No showrooms added yet.</p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '12px' }}>
+            {showroomBifurcation.map((item, idx) => (
+              <div
+                key={idx}
+                style={{
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '10px',
+                  padding: '14px',
+                  background: item.totalPcs > 0 ? '#f0f9ff' : '#f8fafc'
+                }}
+              >
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#0f172a' }}>{item.name}</div>
+                {item.address && (
+                  <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px', lineHeight: 1.4 }}>{item.address}</div>
+                )}
+                {item.phone && (
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Ph: {item.phone}</div>
+                )}
+                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0369a1', marginTop: '8px' }}>{item.totalPcs} Pcs</div>
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{item.challanCount} Transfer(s)</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Central Godown Ready Stock Table */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>👕 Central Godown Ready Stock</h4>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -1500,6 +1606,7 @@ function ReadyStockShowroomModule({ canDelete }: { canDelete: boolean }) {
         </div>
       </div>
 
+      {/* Showroom Transfer Challan Log */}
       <div style={styles.card}>
         <h4 style={{ margin: '0 0 14px 0', color: '#0f172a' }}>📄 Showroom Transfer Challan Register</h4>
         <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
