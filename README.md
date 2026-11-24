@@ -51,3 +51,7 @@ Purchase & Opening Stock → Quick Opening: "📊 Excel / CSV Upload" (.xlsx or 
 "⬇️ Template" downloads the expected columns (Stage, Model, Design, Color, Showroom, Qty, Rate, Batch).
 Ready Godown / Ready Showroom / Trading rows have a Photo picker (saved by Model + Design, shown in Catalog).
 Busy Sales Import also accepts .xlsx now. Enter opening stock only once.
+
+## Bulk photos
+"📷 பல Photo ஒரே நேரத்தில்" (Opening Stock form and Ready Stock page): select many images at once.
+File name = Design number (e.g. `D-101.jpg`) or `Nighty D-101.jpg` to target one model. Unmatched files are listed.
