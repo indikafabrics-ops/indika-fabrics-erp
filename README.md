@@ -45,3 +45,9 @@ Columns are auto-detected (changeable). Each line is matched to Model/Design/Col
 (your manual choices are remembered in the browser). Rows that cannot be matched or exceed showroom stock are
 skipped. Saved as "Showroom Sale" rows with challan_no `BUSY-<bill>-<n>`; re-importing the same file never duplicates.
 Negative / zero quantities (sales returns) are ignored – record returns in the ERP manually.
+
+## Old stock upload
+Purchase & Opening Stock → Quick Opening: "📊 Excel / CSV Upload" (.xlsx or .csv) fills the rows for review,
+"⬇️ Template" downloads the expected columns (Stage, Model, Design, Color, Showroom, Qty, Rate, Batch).
+Ready Godown / Ready Showroom / Trading rows have a Photo picker (saved by Model + Design, shown in Catalog).
+Busy Sales Import also accepts .xlsx now. Enter opening stock only once.
