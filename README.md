@@ -55,3 +55,6 @@ Busy Sales Import also accepts .xlsx now. Enter opening stock only once.
 ## Bulk photos
 "📷 பல Photo ஒரே நேரத்தில்" (Opening Stock form and Ready Stock page): select many images at once.
 File name = Design number (e.g. `D-101.jpg`) or `Nighty D-101.jpg` to target one model. Unmatched files are listed.
+
+## Help
+Sidebar → "📖 உதவி / Guide": Tamil step-by-step guide per module (only the modules a user is allowed to see), with Print / PDF.
