@@ -58,3 +58,10 @@ File name = Design number (e.g. `D-101.jpg`) or `Nighty D-101.jpg` to target one
 
 ## Help
 Sidebar → "📖 உதவி / Guide": Tamil step-by-step guide per module (only the modules a user is allowed to see), with Print / PDF.
+
+## Latest additions
+- Click any Dashboard / Reports card for the detail behind it; every report has Print · PDF · WhatsApp · Excel.
+- Local Name per batch (Cutting / Opening Stock), shown in Godown, Catalog, Reports.
+- Search & Analysis: Daily Summary, Search + Batch Timeline, Batch Profit, Supplier Account, alerts, Barcode labels, Audit Log.
+- Edit / Delete go through Admin approval (Records + Approvals menus).
+- Extra data (design master, supplier master, batch names, approvals, audit log) is kept as JSON files in the Storage bucket `assets/catalog/`.
