@@ -85,3 +85,4 @@ Sidebar → "📖 உதவி / Guide": Tamil step-by-step guide per module (on
 ## Cost Sheet & Stock Value
 - Costing & Rate Fixer -> Cost Sheet: per Model consumption, cloth rate and "Cut to Pack" lines, each tagged with a stage (Cutting/Stitching/QC Check/Packing/Overhead). Stored in Storage `catalog/costsheets.json`.
 - Value per piece grows by stage (cloth, +Cutting, +Stitching, +QC, +Packing, Ready = + Overhead). Shown in Master Reports (Stock Value table, Stage Report) and Production Stage Report; models without a sheet are flagged and excluded from totals; Dashboard alert lists them.
+- Fallback when a model has no Cost Sheet: production stages use the cloth amount issued in Cutting (meters x purchase rate, per cut piece); OPENING stock (batch/challan OPN-…) only uses Selling price minus 20%; new items without a sheet are flagged (`FALLBACK_DISCOUNT` in `lib/valuation.ts`). The basis is shown in a column.

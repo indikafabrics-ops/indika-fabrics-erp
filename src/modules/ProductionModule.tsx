@@ -8,7 +8,9 @@ import { loadBatchNames , nameFor } from '../lib/batchNames';
 import { loadSizeLedger, loadCutSizes, saveSizeUpdates, sizesFor, sumSizes, fmtSizes, sortSizes, type SizeMap } from '../lib/sizeLedger';
 import SizeQty from '../components/SizeQty';
 import RowActions from '../components/RowActions';
-import { loadCostSheets, costAt, sheetFor, type CostSheet, type ValueStage } from '../lib/costSheets';
+import { loadCostSheets, type CostSheet } from '../lib/costSheets';
+import { loadClothPerPc, makeValuer } from '../lib/valuation';
+import { loadDesignMaster, type DesignInfo } from '../lib/masterStore';
 import StageReport from '../components/StageReport';
 import ShareBar from '../components/ShareBar';
 import { EmptyRow, ErrorBanner, Loading, TableWrap, notify, styles } from '../components/ui';
@@ -42,7 +44,9 @@ export default function ProductionModule({ user }: { user?: any }) {
   const [ledger, setLedger] = useState<Record<string, SizeMap>>({});
   const [cutSizes, setCutSizes] = useState<Record<string, SizeMap>>({});
   const [sheets, setSheets] = useState<Record<string, CostSheet>>({});
-  useEffect(() => { loadCostSheets().then(setSheets).catch(() => undefined); }, []);
+  const [clothPc, setClothPc] = useState<Record<string, number>>({});
+  const [designs, setDesigns] = useState<Record<string, DesignInfo>>({});
+  useEffect(() => { loadCostSheets().then(setSheets).catch(() => undefined); loadClothPerPc().then(setClothPc).catch(() => undefined); loadDesignMaster().then(setDesigns).catch(() => undefined); }, []);
   const [tab, setTab] = useState<string>('Cutting');
   const [busyId, setBusyId] = useState<any>(null);
 
@@ -263,7 +267,7 @@ export default function ProductionModule({ user }: { user?: any }) {
         )}
       </div>
 
-      <StageReport wip={wip} meta={meta} names={names} availOf={availOf} stage={tab} costOf={(model, st) => costAt(sheetFor(sheets, model), st as ValueStage)} />
+      <StageReport wip={wip} meta={meta} names={names} availOf={availOf} stage={tab} valuer={makeValuer(sheets, clothPc, designs)} />
     </div>
   );
 }

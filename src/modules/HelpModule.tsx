@@ -181,7 +181,9 @@ const SECTIONS: Section[] = [
       'Cut to Pack வரிசையில் (Cutting, Assorting, Stitching, Overlock, Label, Button, Tag, Packing, Freight…) ஒவ்வொன்றுக்கும் ₹/Pc போடவும். ஒவ்வொரு வரியும் எந்த Stage-க்கு உரியது என்பதைத் தேர்வு செய்யலாம்.',
       'Cloth + Cut to Pack = Costing. சேமித்தால் Master Reports → 💰 Stock Value மற்றும் Production Stage Report-ல் Value தானாக வரும்.',
       'Value Stage வாரி கூடும்: Cloth → Cut Parts (Cloth + Cutting) → Stitching → QC → Packing → Ready Goods (Overhead சேர்த்து முழு Cost).',
-      'Costing போடாத Model வரி "⚠️ Costing போடவும்" என்று காட்டும்; அதன் Value மொத்தத்தில் சேராது. Dashboard-லும் எச்சரிக்கை வரும்.'
+      'Cost Sheet இல்லாத Model-க்கு Value இப்படி வரும்: (1) Production Stage-ல் உள்ள Batch → Cutting-ல் எடுத்த துணியின் தொகை (Meter × Rate); (2) Opening Stock (batch OPN-…) மட்டும் → Selling Price − 20%. புதிய Item-க்கு Cost Sheet போட்டால் போதும். "அடிப்படை" column-ல் எது பயன்பட்டது என்று தெரியும்.',
+      'Cost Sheet சேமித்த உடனே அந்த Model-ன் Value தானாக Cost Sheet-க்கு மாறும்.',
+      'Cost Sheet-ம் Selling Price-ம் இல்லாத Model வரி "⚠️" என்று காட்டும்; அது மொத்தத்தில் சேராது. Dashboard-லும் எச்சரிக்கை வரும்.'
     ],
     tips: ['Ready Goods MRP Value, Cutting-ல் போட்ட MRP-லிருந்து வரும்.', 'Cost Sheet Model பெயரில் சேமிக்கப்படுகிறது (Size வாரி மாறுபாடு இல்லை).']
   },
