@@ -65,3 +65,11 @@ Sidebar → "📖 உதவி / Guide": Tamil step-by-step guide per module (on
 - Search & Analysis: Daily Summary, Search + Batch Timeline, Batch Profit, Supplier Account, alerts, Barcode labels, Audit Log.
 - Edit / Delete go through Admin approval (Records + Approvals menus).
 - Extra data (design master, supplier master, batch names, approvals, audit log) is kept as JSON files in the Storage bucket `assets/catalog/`.
+
+## Size-wise stock, MRP, photos (latest)
+- Production WIP has stage tabs (Cutting / Stitching / QC Check / Packing); moves and damage are entered size by size.
+- Godown → Showroom transfers and showroom sales/returns/damage are size-wise (one `pommys_showroom_transfers` row per size, `size_details` = `Size M`).
+- Size-wise stock for WIP/Godown lives in Storage `catalog/sizes.json` (no DB change); old stock falls back to the Cutting size split.
+- Per-size Rate / MRP, up to 4 photos and up to 6 colour squares live in `catalog/designs.json` (`rates`, `mrp`, `photos`, `swatches`).
+- Busy Import accepts an optional Size column.
+- Back button on every inner page + browser/phone Back.

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { supabase, fetchAll, errMsg } from '../lib/supabase';
 import type { ShowroomRecord } from '../lib/constants';
-import { computeShowroomLines, num, todayStr } from '../lib/helpers';
+import { computeShowroomLines, computeShowroomSizeLines, sizeOfRow, num, todayStr } from '../lib/helpers';
+import { loadSizeLedger, loadCutSizes, saveSizeUpdates, sizesFor, sumSizes, fmtSizes, NO_SIZE, type SizeMap } from '../lib/sizeLedger';
+import SizeQty from '../components/SizeQty';
+import { GalleryEditor, SwatchChips } from '../components/GallerySlots';
 import BusyImport from './BusyImport';
 import { matchPhotosByName, uploadCatalogPhoto } from '../lib/image';
 import { loadBatchMeta, loadModelPhotos } from '../lib/batchMeta';
-import { loadDesignMaster, designLookup, type DesignInfo } from '../lib/masterStore';
+import { loadDesignMaster, designLookup, rateFor, type DesignInfo } from '../lib/masterStore';
 import { loadBatchNames, saveBatchNames , nameFor } from '../lib/batchNames';
 import { logAction } from '../lib/audit';
 import ShareBar from '../components/ShareBar';
@@ -33,14 +36,18 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
   const [targetShowroom, setTargetShowroom] = useState('');
   const [challanNo, setChallanNo] = useState('');
   const [transferDate, setTransferDate] = useState(todayStr());
-  const [transferQty, setTransferQty] = useState('');
+  const [transferBy, setTransferBy] = useState<Record<string, string>>({});
+  const [ledger, setLedger] = useState<Record<string, SizeMap>>({});
+  const [cutSizes, setCutSizes] = useState<Record<string, SizeMap>>({});
   const [sizeNote, setSizeNote] = useState('');
   const [transferring, setTransferring] = useState(false);
 
   // showroom sale / return / damage
   const [adjLine, setAdjLine] = useState('');
   const [adjType, setAdjType] = useState<'SALE' | 'RETURN' | 'DAMAGE'>('SALE');
-  const [adjQty, setAdjQty] = useState('');
+  const [adjBy, setAdjBy] = useState<Record<string, string>>({});
+  const [lastSale, setLastSale] = useState<any>(null);
+  const [gallery, setGallery] = useState<{ model: string; design: string } | null>(null);
   const [adjusting, setAdjusting] = useState(false);
 
   const [meta, setMeta] = useState<Record<string, { design: string; color: string }>>({});
@@ -64,6 +71,7 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
       try {
         setMeta(await loadBatchMeta(readyNow.map((r: any) => ({ batch_code: r.batch_code || '', model_name: r.model_name }))));
         try { setNames(await loadBatchNames()); } catch { /* optional */ }
+        try { setLedger(await loadSizeLedger()); setCutSizes(await loadCutSizes()); } catch { /* optional */ }
         try { const lk = designLookup(await loadDesignMaster()); setDm(() => lk); } catch { /* optional */ }
         const ph = await loadModelPhotos();
         setPhotoOf(() => ph.photoOf);
@@ -128,6 +136,7 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
   };
 
   const lines = computeShowroomLines(transfers).filter(l => l.pcs !== 0);
+  const sizeLines = computeShowroomSizeLines(transfers);
   const totalGodownPcs = readyList.reduce((s, r) => s + num(r.ready_pieces), 0);
   const totalShowroomPcs = transfers.reduce((s, t) => s + num(t.transferred_pieces), 0);
 
@@ -157,12 +166,12 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
   // ---------- transfer godown -> showroom ----------
   const selectedStock = readyList.find(r => String(r.id) === String(selectedStockId));
 
+  const godownSizes = (r: any, pcs?: number): SizeMap => sizesFor(r.batch_code, Math.floor(num(pcs ?? r.ready_pieces)), ledger, cutSizes);
+
   const handleTransfer = async (e: FormEvent) => {
     e.preventDefault();
     if (!targetShowroom) return notify('முதலில் Showroom சேர்க்கவும் / தேர்வு செய்யவும்.', 'err');
     if (!selectedStock) return notify('Ready Stock Batch தேர்வு செய்யவும்.', 'err');
-    const pcs = Math.floor(num(transferQty));
-    if (pcs <= 0) return notify('Transfer Pieces உள்ளிடவும்.', 'err');
 
     setTransferring(true);
     let challan = '';
@@ -170,16 +179,23 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
       // fresh godown count
       const { data: cur, error: curErr } = await supabase.from('pommys_ready_stock').select('*').eq('id', selectedStock.id).limit(1);
       if (curErr || !cur || !cur[0]) throw curErr || new Error('Batch கிடைக்கவில்லை.');
-      const available = num(cur[0].ready_pieces);
+      const available = Math.floor(num(cur[0].ready_pieces));
+      const avail = godownSizes(cur[0], available);
+      const by: SizeMap = {};
+      Object.keys(avail).forEach(sz => { by[sz] = Math.max(0, Math.floor(num(transferBy[sz]))); });
+      for (const sz of Object.keys(avail)) if (by[sz] > avail[sz]) throw new Error(`Size ${sz}: Godown-ல் ${avail[sz]} Pcs மட்டுமே உள்ளது.`);
+      const pcs = sumSizes(by);
+      if (pcs <= 0) throw new Error('குறைந்தது ஒரு Size-ல் Transfer Pieces உள்ளிடவும்.');
       if (pcs > available) throw new Error(`Godown-ல் ${available} Pcs மட்டுமே உள்ளது.`);
 
       challan = challanNo.trim() || `TRF-${new Date().getFullYear()}-${rnd()}`;
-      const { error: insErr } = await supabase.from('pommys_showroom_transfers').insert([{
+      const rows = Object.keys(by).filter(sz => by[sz] > 0).map(sz => ({
         challan_no: challan, transfer_date: transferDate || todayStr(), showroom_name: targetShowroom,
         batch_code: cur[0].batch_code, design_no: cur[0].design_no || '-', color: cur[0].color || '-',
-        model_name: cur[0].model_name || '-', size_details: sizeNote.trim() || '-',
-        transferred_pieces: pcs, status: 'Transferred to Showroom'
-      }]);
+        model_name: cur[0].model_name || '-', size_details: sz === NO_SIZE ? (sizeNote.trim() || '-') : `Size ${sz}`,
+        transferred_pieces: by[sz], status: 'Transferred to Showroom'
+      }));
+      const { error: insErr } = await supabase.from('pommys_showroom_transfers').insert(rows);
       if (insErr) throw insErr;
 
       const { error: updErr } = await supabase.from('pommys_ready_stock').update({ ready_pieces: available - pcs }).eq('id', cur[0].id);
@@ -188,9 +204,13 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
         throw updErr;
       }
 
-      logAction(`Showroom Transfer ${challan}: ${pcs} pcs → ${targetShowroom}`);
+      const rest: SizeMap = {};
+      Object.keys(avail).forEach(sz => { rest[sz] = avail[sz] - by[sz]; });
+      try { await saveSizeUpdates({ [cur[0].batch_code]: rest }); } catch { notify('Size விவரம் சேமிக்க முடியவில்லை (Pcs சரியாக நகர்ந்துள்ளது).', 'warn'); }
+
+      logAction(`Showroom Transfer ${challan}: ${pcs} pcs (${fmtSizes(by)}) → ${targetShowroom}`);
       notify(`✅ ${pcs} pcs → ${targetShowroom} Showroom (Challan ${challan})`);
-      setTransferQty(''); setChallanNo(''); setSizeNote(''); setSelectedStockId('');
+      setTransferBy({}); setChallanNo(''); setSizeNote(''); setSelectedStockId('');
       await loadAll();
     } catch (err: any) {
       notify('Transfer தோல்வி: ' + errMsg(err), 'err');
@@ -200,37 +220,67 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
   };
 
   // ---------- showroom sale / return / damage ----------
+  const adjSizes: SizeMap = (() => {
+    const line = lines[Number(adjLine)];
+    if (adjLine === '' || !line) return {};
+    const out: SizeMap = {};
+    sizeLines.filter(x => x.showroom === line.showroom && x.model === line.model && x.design === line.design && x.color === line.color && x.pcs > 0)
+      .forEach(x => { out[x.size === '-' ? NO_SIZE : x.size] = x.pcs; });
+    return out;
+  })();
+  const adjLineInfo = (() => { const l = lines[Number(adjLine)]; return l ? dm(l.model, l.design) : undefined; })();
+
   const handleAdjust = async (e: FormEvent) => {
     e.preventDefault();
     const line = lines[Number(adjLine)];
     if (adjLine === '' || !line) return notify('Showroom Stock வரி தேர்வு செய்யவும்.', 'err');
-    const pcs = Math.floor(num(adjQty));
-    if (pcs <= 0) return notify('Pieces உள்ளிடவும்.', 'err');
+    const by: SizeMap = {};
+    for (const sz of Object.keys(adjSizes)) {
+      by[sz] = Math.max(0, Math.floor(num(adjBy[sz])));
+      if (by[sz] > adjSizes[sz]) return notify(`Size ${sz}: ${line.showroom}-ல் ${adjSizes[sz]} Pcs மட்டுமே உள்ளது.`, 'err');
+    }
+    const pcs = sumSizes(by);
+    if (pcs <= 0) return notify('குறைந்தது ஒரு Size-ல் Pieces உள்ளிடவும்.', 'err');
     if (pcs > line.pcs) return notify(`${line.showroom}-ல் இந்த Item ${line.pcs} Pcs மட்டுமே உள்ளது.`, 'err');
 
     setAdjusting(true);
     try {
       const status = adjType === 'SALE' ? 'Showroom Sale' : adjType === 'RETURN' ? 'Returned to Godown' : 'Showroom Damage';
       const ref = `${adjType === 'SALE' ? 'SAL' : adjType === 'RETURN' ? 'RTN' : 'DMG'}-${rnd()}`;
-      const { error: insErr } = await supabase.from('pommys_showroom_transfers').insert([{
+      const used = Object.keys(by).filter(sz => by[sz] > 0);
+      const rows = used.map(sz => ({
         challan_no: ref, transfer_date: todayStr(), showroom_name: line.showroom, batch_code: ref,
-        design_no: line.design, color: line.color, model_name: line.model, size_details: status,
-        transferred_pieces: -pcs, status
-      }]);
+        design_no: line.design, color: line.color, model_name: line.model,
+        size_details: sz === NO_SIZE ? status : `${status} | Size ${sz}`,
+        transferred_pieces: -by[sz], status
+      }));
+      const { error: insErr } = await supabase.from('pommys_showroom_transfers').insert(rows);
       if (insErr) throw insErr;
 
       if (adjType === 'RETURN') {
         const { error } = await supabase.from('pommys_ready_stock').insert([{ batch_code: ref, model_name: line.model, design_no: line.design, color: line.color, ready_pieces: pcs }]);
         if (error) throw error;
+        const back: SizeMap = {}; used.forEach(sz => { back[sz] = by[sz]; });
+        try { await saveSizeUpdates({ [ref]: back }); } catch { /* optional */ }
       }
       if (adjType === 'DAMAGE') {
         const { error } = await supabase.from('pommys_exceptions_stock').insert([{
-          stock_type: 'DAMAGE', ref_code: ref, model_or_item: line.model, color: line.color, qty: pcs, unit: 'Pcs', remarks: `Showroom Damage (${line.showroom})`
+          stock_type: 'DAMAGE', ref_code: ref, model_or_item: line.model, color: line.color, qty: pcs, unit: 'Pcs', remarks: `Showroom Damage (${line.showroom}) ${fmtSizes(by)}`.trim()
         }]);
         if (error) throw error;
       }
+      if (adjType === 'SALE') {
+        let total = 0;
+        const slipRows = used.map(sz => {
+          const r = rateFor(adjLineInfo, sz);
+          total += r.price * by[sz];
+          return [sz, by[sz], r.price || '-', r.mrp || '-', r.price ? r.price * by[sz] : '-'];
+        });
+        setLastSale({ title: `Sale ${ref}`, subtitle: `${line.showroom} • ${line.model} ${line.design !== '-' ? line.design : ''} ${line.color !== '-' ? '(' + line.color + ')' : ''}`, headers: ['Size', 'Qty', 'Rate ₹', 'MRP ₹', 'Amount ₹'], rows: slipRows, footer: [`மொத்தம்: ${pcs} Pcs • ₹${total}`] });
+      }
+      logAction(`${status} ${ref}: ${line.showroom} ${pcs} pcs (${fmtSizes(by)})`);
       notify(`✅ ${line.showroom}: ${pcs} pcs ${status}`);
-      setAdjQty(''); setAdjLine('');
+      setAdjBy({}); setAdjLine('');
       await loadAll();
     } catch (err: any) {
       notify('Save தோல்வி: ' + errMsg(err), 'err');
@@ -279,7 +329,7 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
             </div>
             <div>
               <label style={styles.label}>Ready Stock Batch *</label>
-              <select value={selectedStockId} onChange={e => { setSelectedStockId(e.target.value); setTransferQty(''); }} style={styles.input}>
+              <select value={selectedStockId} onChange={e => { setSelectedStockId(e.target.value); setTransferBy({}); }} style={styles.input}>
                 <option value="">-- Choose Batch --</option>
                 {readyList.map(r => (
                   <option key={r.id} value={r.id}>
@@ -288,12 +338,15 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
                 ))}
               </select>
             </div>
-            <div>
-              <label style={styles.label}>Transfer Pieces *</label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <input type="number" min="1" step="1" placeholder={selectedStock ? `Max ${selectedStock.ready_pieces}` : 'Pieces'} value={transferQty} onChange={e => setTransferQty(e.target.value)} style={styles.input} />
-                {selectedStock && <button type="button" onClick={() => setTransferQty(String(selectedStock.ready_pieces))} style={{ ...styles.secondaryBtn, padding: '0 10px' }}>All</button>}
-              </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={styles.label}>Transfer Pieces * (Size வாரியாக — தேவையான Size-ல் மட்டும் உள்ளிடவும்)</label>
+              {selectedStock ? (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <SizeQty avail={godownSizes(selectedStock)} value={transferBy} onChange={setTransferBy} placeholder="0" />
+                  <button type="button" onClick={() => { const a = godownSizes(selectedStock); setTransferBy(Object.fromEntries(Object.entries(a).map(([k, v]) => [k, String(v)]))); }} style={{ ...styles.secondaryBtn, padding: '6px 12px' }}>All</button>
+                  <span style={{ fontSize: '12px', color: '#475569' }}>மொத்தம்: <b>{sumSizes(Object.fromEntries(Object.entries(transferBy).map(([k, v]) => [k, Math.floor(num(v))])))}</b> / {selectedStock.ready_pieces}</span>
+                </div>
+              ) : <div style={{ fontSize: '12px', color: '#64748b' }}>முதலில் Batch தேர்வு செய்யவும்.</div>}
             </div>
             <div><label style={styles.label}>Size / Note (Optional)</label><input type="text" placeholder="Optional" value={sizeNote} onChange={e => setSizeNote(e.target.value)} style={styles.input} /></div>
             <div><label style={styles.label}>Challan No. (Optional)</label><input type="text" placeholder="Auto if blank" value={challanNo} onChange={e => setChallanNo(e.target.value)} style={styles.input} /></div>
@@ -314,7 +367,7 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
           <form onSubmit={handleAdjust} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: '12px', alignItems: 'end' }}>
             <div style={{ gridColumn: 'span 2' }}>
               <label style={styles.label}>Showroom Stock *</label>
-              <select value={adjLine} onChange={e => setAdjLine(e.target.value)} style={styles.input}>
+              <select value={adjLine} onChange={e => { setAdjLine(e.target.value); setAdjBy({}); }} style={styles.input}>
                 <option value="">-- Select Showroom / Item --</option>
                 {lines.map((l, i) => (
                   <option key={i} value={i}>{l.showroom} | {l.model}{l.design !== '-' ? ` | ${l.design}` : ''}{l.color !== '-' ? ` (${l.color})` : ''} — {l.pcs} Pcs</option>
@@ -329,11 +382,29 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
                 <option value="DAMAGE">⚠️ Damage</option>
               </select>
             </div>
-            <div><label style={styles.label}>Pieces *</label><input type="number" min="1" step="1" value={adjQty} onChange={e => setAdjQty(e.target.value)} style={styles.input} /></div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={styles.label}>Pieces * (Size வாரியாக)</label>
+              {Object.keys(adjSizes).length === 0 ? <div style={{ fontSize: '12px', color: '#64748b' }}>முதலில் Showroom Stock வரி தேர்வு செய்யவும்.</div> : (
+                <div>
+                  <SizeQty avail={adjSizes} value={adjBy} onChange={setAdjBy} placeholder="0" />
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '6px', fontSize: '12px', color: '#475569' }}>
+                    {Object.keys(adjSizes).map(sz => { const r = rateFor(adjLineInfo, sz); return <span key={sz}>{sz}: Rate {r.price ? `₹${r.price}` : '-'} • MRP {r.mrp ? `₹${r.mrp}` : '-'}</span>; })}
+                  </div>
+                </div>
+              )}
+            </div>
             <button type="submit" disabled={adjusting} style={{ ...styles.primaryBtn, background: '#7c3aed' }}>{adjusting ? 'Saving...' : 'Save'}</button>
           </form>
         )}
       </div>
+
+      {lastSale && (
+        <div style={{ ...styles.card, borderLeft: '4px solid #7c3aed' }}>
+          <b>🧾 {lastSale.title}</b> <span style={{ color: '#64748b', fontSize: '12px' }}>{lastSale.subtitle}</span>
+          <div style={{ margin: '6px 0' }}>{lastSale.footer[0]}</div>
+          <ShareBar doc={lastSale} />
+        </div>
+      )}
 
       <BusyImport showrooms={showrooms.map(s => String(s.showroom_name).trim()).filter(Boolean)} onDone={loadAll} />
 
@@ -364,13 +435,13 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
       <div style={styles.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
           <h4 style={{ margin: 0, color: '#0f172a' }}>👕 Central Godown Ready Stock</h4>
-          <ShareBar doc={{ title: 'Godown Ready Stock', headers: ['Batch', 'Local Name', 'Design', 'Model', 'Material', 'Fit', 'Size', 'Color', 'Price', 'Pcs'], rows: readyList.map((r: any) => [r.batch_code, nameFor(names, r.batch_code) || '-', designOf(r), r.model_name, infoOf(r)?.material || '-', infoOf(r)?.fit || '-', infoOf(r)?.sizes || '-', colorOf(r), infoOf(r)?.price ? `₹${infoOf(r)!.price}` : '-', r.ready_pieces]), footer: [`மொத்தம்: ${readyList.reduce((a: number, r: any) => a + num(r.ready_pieces), 0)} Pcs`] }} />
+          <ShareBar doc={{ title: 'Godown Ready Stock', headers: ['Batch', 'Local Name', 'Design', 'Model', 'Material', 'Fit', 'Size', 'Color', 'Price', 'MRP', 'Pcs'], rows: readyList.map((r: any) => [r.batch_code, nameFor(names, r.batch_code) || '-', designOf(r), r.model_name, infoOf(r)?.material || '-', infoOf(r)?.fit || '-', fmtSizes(godownSizes(r)), colorOf(r), infoOf(r)?.price ? `₹${infoOf(r)!.price}` : '-', infoOf(r)?.mrp ? `₹${infoOf(r)!.mrp}` : '-', r.ready_pieces]), footer: [`மொத்தம்: ${readyList.reduce((a: number, r: any) => a + num(r.ready_pieces), 0)} Pcs`] }} />
           <label style={{ background: '#fdf4ff', color: '#a21caf', border: '1px solid #e9a8f5', padding: '7px 12px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
             {uploadingKey === '__bulk__' ? 'ஏற்றுகிறது...' : '📷 பல Photo ஒரே நேரத்தில் (File பெயர் = Design எண்)'}
             <input type="file" accept="image/*" multiple disabled={uploadingKey === '__bulk__'} style={{ display: 'none' }} onChange={e => { handleBulkPhotos(e.target.files); e.target.value = ''; }} />
           </label>
         </div>
-        <TableWrap minWidth={1100}>
+        <TableWrap minWidth={1200}>
           <thead>
             <tr style={{ background: '#0f172a', color: 'white' }}>
               <th style={styles.thSub}>Photo</th>
@@ -383,16 +454,17 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
               <th style={styles.thSub}>Size</th>
               <th style={styles.thSub}>Color</th>
               <th style={styles.thSub}>Price</th>
-              <th style={styles.thSub}>Godown Pcs</th>
+              <th style={styles.thSub}>MRP</th>
+              <th style={styles.thSub}>Godown Pcs (Size வாரியாக)</th>
               {canDelete && user && <th style={{ ...styles.thSub, width: '170px', textAlign: 'center' }}>Action</th>}
             </tr>
           </thead>
           <tbody>
-            {readyList.length === 0 ? <EmptyRow cols={canDelete && user ? 12 : 11} text="Central Godown-ல் Ready Stock இல்லை." /> : readyList.map((r, idx) => (
+            {readyList.length === 0 ? <EmptyRow cols={canDelete && user ? 13 : 12} text="Central Godown-ல் Ready Stock இல்லை." /> : readyList.map((r, idx) => (
               <tr key={r.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                 <td style={styles.td}>
                   {(() => {
-                    const img = photoOf(r.model_name, designOf(r), colorOf(r));
+                    const img = photoOf(r.model_name, designOf(r), colorOf(r)) || infoOf(r)?.photos?.find(Boolean) || '';
                     const busy = uploadingKey === `${r.model_name}|${designOf(r)}`;
                     return (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -401,6 +473,7 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
                           {busy ? '...' : img ? '🔄' : '📷 Photo'}
                           <input type="file" accept="image/*" disabled={busy} onChange={e => { handlePhoto(r, e.target.files && e.target.files[0] ? e.target.files[0] : null); e.target.value = ''; }} style={{ display: 'none' }} />
                         </label>
+                        <button type="button" title="4 Photo + Colour Squares" onClick={() => setGallery({ model: r.model_name, design: designOf(r) })} style={{ ...styles.secondaryBtn, padding: '5px 8px', fontSize: '11px' }}>🖼️</button>
                       </div>
                     );
                   })()}
@@ -415,9 +488,10 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
                 <td style={styles.td}>{infoOf(r)?.material || '-'}</td>
                 <td style={styles.td}>{infoOf(r)?.fit || '-'}</td>
                 <td style={styles.td}>{infoOf(r)?.sizes || '-'}</td>
-                <td style={styles.td}>{colorOf(r)}</td>
+                <td style={styles.td}>{colorOf(r)}<SwatchChips swatches={infoOf(r)?.swatches} /></td>
                 <td style={styles.td}>{infoOf(r)?.price ? `₹${infoOf(r)!.price}` : '-'}</td>
-                <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}</td>
+                <td style={styles.td}>{infoOf(r)?.mrp ? `₹${infoOf(r)!.mrp}` : '-'}</td>
+                <td style={{ ...styles.td, color: '#059669', fontWeight: 'bold' }}>{r.ready_pieces}<div style={{ fontSize: '11px', color: '#64748b', fontWeight: 'normal' }}>{fmtSizes(godownSizes(r))}</div></td>
                 {canDelete && user && (
                   <td style={{ ...styles.td, textAlign: 'center' }}>
                     <RowActions user={user} table="pommys_ready_stock" row={r} label={`Ready Stock ${r.batch_code} (${r.model_name})`} fields={['batch_code', 'model_name', 'design_no', 'color', 'ready_pieces']} onDone={loadAll} />
@@ -442,17 +516,18 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
               <th style={styles.thSub}>Type</th>
               <th style={styles.thSub}>Pcs</th>
               <th style={styles.thSub}>Challan</th>
+              {user && <th style={styles.thSub}>Action</th>}
             </tr>
           </thead>
           <tbody>
-            {transfers.length === 0 ? <EmptyRow cols={8} text="Showroom Stock பதிவுகள் இல்லை." /> : transfers.slice(0, 300).map((t, idx) => (
+            {transfers.length === 0 ? <EmptyRow cols={user ? 9 : 8} text="Showroom Stock பதிவுகள் இல்லை." /> : transfers.slice(0, 300).map((t, idx) => (
               <tr key={t.id ?? idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                 <td style={styles.td}><strong>{t.challan_no}</strong></td>
                 <td style={styles.td}>{t.transfer_date || '-'}</td>
                 <td style={{ ...styles.td, fontWeight: 'bold', color: '#0369a1' }}>{t.showroom_name}</td>
                 <td style={styles.td}>{t.model_name}</td>
                 <td style={styles.td}>{t.design_no || '-'}{t.color && t.color !== '-' ? ` (${t.color})` : ''}</td>
-                <td style={styles.td}>{t.status || t.size_details || '-'}</td>
+                <td style={styles.td}>{t.status || '-'}{sizeOfRow(t) !== '-' ? ` • ${sizeOfRow(t)}` : ''}</td>
                 <td style={{ ...styles.td, fontWeight: 'bold', color: num(t.transferred_pieces) < 0 ? '#dc2626' : '#059669' }}>{t.transferred_pieces}</td>
                 <td style={styles.td}>
                   {(() => {
@@ -465,12 +540,14 @@ export default function ReadyStockModule({ canDelete, user }: { canDelete: boole
                     </div>);
                   })()}
                 </td>
+                {user && <td style={styles.td}><RowActions user={user} table="pommys_showroom_transfers" row={t} label={`Showroom ${t.challan_no} ${t.model_name}`} fields={['showroom_name', 'design_no', 'color', 'model_name', 'size_details', 'transferred_pieces']} onDone={loadAll} /></td>}
               </tr>
             ))}
           </tbody>
         </TableWrap>
         {transfers.length > 300 && <p style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>சமீபத்திய 300 பதிவுகள் மட்டும் காட்டப்படுகின்றன. முழு விவரம்: Reports → Godown & Showroom → Export.</p>}
       </div>
+      {gallery && <GalleryEditor model={gallery.model} design={gallery.design} onClose={() => setGallery(null)} onSaved={loadAll} />}
     </div>
   );
 }

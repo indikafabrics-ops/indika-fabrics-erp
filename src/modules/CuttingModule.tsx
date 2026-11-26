@@ -4,6 +4,8 @@ import { useMasters } from '../lib/useMasters';
 import { num, r3 } from '../lib/helpers';
 import { SelectNew, notify, styles } from '../components/ui';
 import PhotoPick from '../components/PhotoPick';
+import { PhotoSlots, SwatchSlots } from '../components/GallerySlots';
+import { emptyPhotoSlot, emptySwatchSlot, resolvePhotoSlots, resolveSwatchSlots, type PhotoSlot, type SwatchSlot } from '../lib/gallery';
 import { uploadPhoto } from '../lib/image';
 import { saveDesignInfo } from '../lib/masterStore';
 import { logAction } from '../lib/audit';
@@ -27,7 +29,7 @@ async function makeNextBatchCode(): Promise<string> {
 }
 
 const emptyFabricRow = () => ({ stockId: '', issueMeters: '', photoFile: null as File | null });
-const emptySizeRow = () => ({ size: '', pieces: '', consumption: '' });
+const emptySizeRow = () => ({ size: '', pieces: '', consumption: '', price: '', mrp: '' });
 
 export default function CuttingModule() {
   const masters = useMasters();
@@ -37,13 +39,15 @@ export default function CuttingModule() {
   const [model, setModel] = useState('');
   const [sizes, setSizes] = useState<any[]>([emptySizeRow()]);
   const [endBits, setEndBits] = useState('');
-  const [modelPhoto, setModelPhoto] = useState<File | null>(null);
+  const [photoSlots, setPhotoSlots] = useState<PhotoSlot[]>([emptyPhotoSlot()]);
+  const [swatchSlots, setSwatchSlots] = useState<SwatchSlot[]>([emptySwatchSlot()]);
   const [numColors, setNumColors] = useState('');
   const [localName, setLocalName] = useState('');
   const [lastSlip, setLastSlip] = useState<ShareDoc | null>(null);
   const [fit, setFit] = useState('');
   const [material, setMaterial] = useState('');
   const [price, setPrice] = useState('');
+  const [mrpAll, setMrpAll] = useState('');
   const [yieldInfo, setYieldInfo] = useState<{ batches: number; pcsPer100: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [formKey, setFormKey] = useState(0);
@@ -106,7 +110,7 @@ export default function CuttingModule() {
     if (endBitVal < 0) return notify('End Bits எதிர்மறையாக இருக்க முடியாது.', 'err');
     if (endBitVal > totalIssued) return notify('End Bits அளவு Issue செய்த Meters-ஐ விட அதிகம்.', 'err');
     if (sizes.some(s => num(s.pieces) < 0 || num(s.consumption) < 0)) return notify('Pieces / Consumption எதிர்மறையாக இருக்க முடியாது.', 'err');
-    const usableSizes = sizes.filter(s => num(s.pieces) > 0).map(s => ({ size: s.size || 'Free', pieces: num(s.pieces), consumption: num(s.consumption) }));
+    const usableSizes = sizes.filter(s => num(s.pieces) > 0).map(s => ({ size: s.size || 'Free', pieces: num(s.pieces), consumption: num(s.consumption), price: num(s.price), mrp: num(s.mrp) }));
 
     if (expectedPcs > 0 && totalPieces > expectedPcs * 1.3 && !window.confirm(`இந்த Model-ன் முந்தைய Cutting-படி ${totalIssued} M துணிக்கு சுமார் ${expectedPcs} Pcs தான் வரும்; நீங்கள் ${totalPieces} Pcs உள்ளிட்டுள்ளீர்கள். சரியா? தொடரவா?`)) return;
 
@@ -124,9 +128,16 @@ export default function CuttingModule() {
       // photos first (nothing is written to the database yet, so a failure here is harmless)
       let photoWarn = '';
       let modelImageUrl = '';
-      if (modelPhoto) {
-        try { modelImageUrl = await uploadPhoto(modelPhoto, 'models'); } catch { photoWarn = ' (Model Photo ஏறவில்லை)'; }
-      }
+      let photoUrls: string[] = [];
+      let swatchList: any[] = [];
+      try {
+        const p = await resolvePhotoSlots(photoSlots);
+        photoUrls = p.urls; modelImageUrl = p.urls.find(u => u) || '';
+        if (p.failed) photoWarn = ` (${p.failed} Model Photo ஏறவில்லை)`;
+        const sw = await resolveSwatchSlots(swatchSlots);
+        swatchList = sw.swatches;
+        if (sw.failed) photoWarn += ` (${sw.failed} Colour Photo ஏறவில்லை)`;
+      } catch { photoWarn = ' (Photo ஏறவில்லை)'; }
 
       const colorsCount = Math.max(0, Math.floor(num(numColors))) || chosenColors.length;
       const fabricsJson: any[] = [];
@@ -144,7 +155,7 @@ export default function CuttingModule() {
         fabricsJson.push({
           stockId: s.id, issueMeters: issue, item_name: s.item_name, design_no: s.design_no || '-', color: s.color || '-',
           model_image: modelImageUrl, color_image: colorImageUrl, colors_count: colorsCount,
-          fit: fit.trim(), material: (material.trim() || s.item_name || ''), price: num(price)
+          fit: fit.trim(), material: (material.trim() || s.item_name || ''), price: num(price), mrp: num(mrpAll)
         });
       }
 
@@ -181,12 +192,14 @@ export default function CuttingModule() {
       // remember Material / Fit / Size / Price per design so every later screen can show them
       try {
         const sizeText = usableSizes.map(u => u.size).join(', ');
+        const rates: Record<string, { price?: number; mrp?: number }> = {};
+        usableSizes.forEach(u => { if (u.price > 0 || u.mrp > 0) rates[u.size] = { price: u.price || undefined, mrp: u.mrp || undefined }; });
         const seen = new Set<string>();
         const entries: any[] = [];
         fabricsJson.forEach(f => {
           const k = `${f.design_no}`;
           if (seen.has(k)) return; seen.add(k);
-          entries.push({ model: finalModel, design: f.design_no, material: f.material, fit: f.fit, sizes: sizeText, price: f.price });
+          entries.push({ model: finalModel, design: f.design_no, material: f.material, fit: f.fit, sizes: sizeText, price: f.price, mrp: f.mrp, rates, photos: photoUrls, swatches: swatchList });
         });
         await saveDesignInfo(entries);
       } catch { warn += ' (Fit/Material/Price விவரம் சேமிக்கப்படவில்லை)'; }
@@ -203,9 +216,9 @@ export default function CuttingModule() {
       setModel('');
       setSizes([emptySizeRow()]);
       setEndBits('');
-      setModelPhoto(null);
+      setPhotoSlots([emptyPhotoSlot()]); setSwatchSlots([emptySwatchSlot()]);
       setNumColors('');
-      setFit(''); setMaterial(''); setPrice(''); setLocalName('');
+      setFit(''); setMaterial(''); setPrice(''); setMrpAll(''); setLocalName('');
       setFormKey(k => k + 1);
       setBatchCode(await makeNextBatchCode());
       await fetchLiveStock();
@@ -307,23 +320,28 @@ export default function CuttingModule() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px' }}>
               <SelectNew value={material} onChange={setMaterial} options={masters.materials} placeholder="-- Material (Auto: Fabric) --" newLabel="+ New Material" />
               <SelectNew value={fit} onChange={setFit} options={masters.fits} placeholder="-- Fit --" newLabel="+ New Fit" />
-              <input type="number" min="0" step="any" placeholder="Selling Price ₹" value={price} onChange={e => setPrice(e.target.value)} style={styles.input} />
+              <input type="number" min="0" step="any" placeholder="Selling Price ₹ (எல்லா Size)" value={price} onChange={e => setPrice(e.target.value)} style={styles.input} />
+              <input type="number" min="0" step="any" placeholder="MRP ₹ (எல்லா Size)" value={mrpAll} onChange={e => setMrpAll(e.target.value)} style={styles.input} />
             </div>
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>இங்கு ஒரு முறை உள்ளிட்டால் Godown, Catalog, Showroom வரை எல்லா இடத்திலும் தானாக வரும்.</div>
           </div>
           <div>
-            <label style={styles.label}>Model Photo (Salesman Catalog-க்கு)</label>
-            <PhotoPick file={modelPhoto} onChange={setModelPhoto} label="📷 Photo எடு / தேர்வு" size={84} />
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>Photo இல்லாவிட்டாலும் Save ஆகும். ஒவ்வொரு Color-க்கும் தனி Photo மேலே Fabric வரிசையில் சேர்க்கலாம்.</div>
-          </div>
+            <label style={styles.label}>Product Photos (Front / Back / Side / Close-up)</label>
+            <PhotoSlots slots={photoSlots} onChange={setPhotoSlots} />
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>முதலில் 1 Photo; தேவையானால் + Add Photo (அதிகபட்சம் 4). Photo இல்லாவிட்டாலும் Save ஆகும்.</div>
+            <label style={{ ...styles.label, marginTop: '12px' }}>Colour Squares (அதிகபட்சம் 6 — Fabric Photo அல்லது Colour பெயர்; Assorted-உம் உண்டு)</label>
+            <SwatchSlots slots={swatchSlots} onChange={setSwatchSlots} />
+            </div>
         </div>
 
         <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', marginBottom: '18px' }}>
-          <label style={styles.label}>3. Size & Pieces *</label>
+          <label style={styles.label}>3. Size & Pieces * (ஒவ்வொரு Size-க்கும் தனி Rate / MRP கொடுக்கலாம்; காலியாக விட்டால் மேலே உள்ள பொது Rate வரும்)</label>
           {sizes.map((s, idx) => (
             <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
               <SelectNew value={s.size} onChange={v => updateSize(idx, { size: v })} options={masters.sizes} placeholder="-- Size --" newLabel="+ Other Size" />
               <input type="number" min="0" step="1" placeholder="Pieces *" value={s.pieces} onChange={e => updateSize(idx, { pieces: e.target.value })} style={styles.input} />
+              <input type="number" min="0" step="any" placeholder="Size Rate ₹ (Opt)" value={s.price} onChange={e => updateSize(idx, { price: e.target.value })} style={styles.input} />
+              <input type="number" min="0" step="any" placeholder="Size MRP ₹ (Opt)" value={s.mrp} onChange={e => updateSize(idx, { mrp: e.target.value })} style={styles.input} />
               <div style={{ display: 'flex', gap: '6px' }}>
                 <input type="number" min="0" step="any" placeholder="Avg Mtr/Pc (Opt)" value={s.consumption} onChange={e => updateSize(idx, { consumption: e.target.value })} style={styles.input} />
                 {sizes.length > 1 && (

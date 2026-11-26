@@ -1,5 +1,5 @@
 import HelpModule from './modules/HelpModule';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { hashPassword, isHashed, verifyPassword } from './lib/password';
 import { supabase, POMMYS_LOGO_URL, errMsg } from './lib/supabase';
 import { LOGIN_TABS, MENU_ITEMS, type MenuKey, type UserRole } from './lib/constants';
@@ -185,23 +185,52 @@ function Shell({ user, onLogout }: { user: any; onLogout: () => void }) {
   const currentMeta = allowedMenus.find(m => m.key === activeMenu) || allowedMenus[0];
   const hasQuick = effectiveKeys.includes('grn') || effectiveKeys.includes('cutting') || effectiveKeys.includes('reports');
 
-  const select = (key: MenuKey) => {
+  // menu history: ← Back button + the browser/phone Back key both return to the previous page
+  const [trail, setTrail] = useState<MenuKey[]>([]);
+  const select = (key: MenuKey, fromBack = false) => {
+    if (!fromBack && key !== activeMenu) {
+      setTrail(t => [...t.slice(-19), activeMenu]);
+      try { window.history.pushState({ pommys: key }, ''); } catch { /* ignore */ }
+    }
     setActiveMenu(key);
     setShowHelp(false);
     if (isCompact) setSidebarOpen(false);
   };
+  const goBack = () => {
+    const prev = trail[trail.length - 1];
+    if (!prev) return;
+    setTrail(t => t.slice(0, -1));
+    select(prev, true);
+  };
+  const trailRef = useRef(trail);
+  trailRef.current = trail;
+  useEffect(() => {
+    const onPop = (ev: Event) => {
+      const w = window as any;
+      if (w.__pommysSkipPop) { w.__pommysSkipPop = false; w.__pommysSkipEvent = ev; return; }
+      if ((w.__pommysModals || 0) > 0) return; // a pop-up handles its own Back
+      const t = trailRef.current;
+      if (t.length === 0) { try { window.history.pushState({ pommys: 'home' }, ''); } catch { /* ignore */ } return; }
+      setTrail(t.slice(0, -1));
+      setActiveMenu(t[t.length - 1]);
+      setShowHelp(false);
+    };
+    try { window.history.replaceState({ pommys: 'start' }, ''); window.history.pushState({ pommys: 'home' }, ''); } catch { /* ignore */ }
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   const page = (key: MenuKey) => {
     switch (key) {
       case 'dashboard': return <DashboardHome onNavigate={select} allowedMenus={allowedMenus} />;
       case 'grn': return <GRNModule />;
       case 'cutting': return <CuttingModule />;
-      case 'production': return <ProductionModule />;
-      case 'storeroom': return <StoreRoomModule />;
+      case 'production': return <ProductionModule user={user} />;
+      case 'storeroom': return <StoreRoomModule user={user} />;
       case 'readystock': return <ReadyStockModule user={user} canDelete={role === 'ADMIN' || role === 'OFFICE'} />;
       case 'catalog': return <CatalogModule hideCostRate={role === 'CUSTOMER'} hideStockQty={role === 'CUSTOMER'} />;
       case 'costing': return <CostingModule />;
-      case 'tailor': return <TailorModule />;
+      case 'tailor': return <TailorModule user={user} />;
       case 'reports': return <ReportsModule />;
       case 'analysis': return <AnalysisModule user={user} onNavigate={select} />;
       case 'records': return <RecordsModule user={user} />;
@@ -266,6 +295,9 @@ function Shell({ user, onLogout }: { user: any; onLogout: () => void }) {
         </div>
 
         <div style={{ flex: 1, padding: isCompact ? '14px 12px 60px 12px' : '22px', overflowY: 'auto', minWidth: 0 }}>
+          {trail.length > 0 && !showHelp && (
+            <button type="button" onClick={goBack} style={{ ...styles.secondaryBtn, marginBottom: '12px', padding: '6px 14px', fontWeight: 'bold' }}>← Back{trail[trail.length - 1] ? ` (${(MENU_ITEMS.find(m => m.key === trail[trail.length - 1])?.label || '').replace(/^\S+\s/, '')})` : ''}</button>
+          )}
           {/* key = remount on menu change so every module loads fresh data */}
           <div key={showHelp ? 'help' : activeMenu}>{showHelp ? <HelpModule allowed={effectiveKeys} /> : page(activeMenu)}</div>
         </div>

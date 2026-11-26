@@ -180,3 +180,29 @@ export async function loadStockSnapshot(): Promise<StockSnapshot> {
     lowTrims: trims.filter((t: any) => num(t.qty) <= num(t.reorder_level ?? 20)).length
   };
 }
+
+/** size of a showroom row: "Size M", "Showroom Sale | Size M" or a plain "M" (old opening stock) – otherwise "-" */
+export function sizeOfRow(t: any): string {
+  const raw = String(t?.size_details || '').trim();
+  const m = raw.match(/(?:^|\|\s*)(?:Size\s+)?(XXS|XS|S|M|L|XL|XXL|[2-6]XL|Free(?: Size)?|\d{1,3})\s*$/i);
+  return m ? m[1].toUpperCase().replace('FREE SIZE', 'Free').replace(/^FREE$/, 'Free') : '-';
+}
+
+export interface ShowroomSizeLine extends ShowroomLine { size: string }
+
+/** same as computeShowroomLines but one line per size */
+export function computeShowroomSizeLines(transfers: any[]): ShowroomSizeLine[] {
+  const map = new Map<string, ShowroomSizeLine>();
+  (transfers || []).forEach(t => {
+    const showroom = String(t.showroom_name || '').trim() || 'Unknown';
+    const model = String(t.model_name || '-').trim() || '-';
+    const design = String(t.design_no || '-').trim() || '-';
+    const color = String(t.color || '-').trim() || '-';
+    const size = sizeOfRow(t);
+    const key = [showroom, model, design, color, size].map(x => x.toLowerCase()).join('|');
+    const cur = map.get(key) || { showroom, model, design, color, size, pcs: 0 };
+    cur.pcs += num(t.transferred_pieces);
+    map.set(key, cur);
+  });
+  return Array.from(map.values()).sort((a, b) => (a.showroom + a.model + a.design + a.color + a.size).localeCompare(b.showroom + b.model + b.design + b.color + b.size));
+}

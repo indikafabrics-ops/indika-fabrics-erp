@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ShareBar from './ShareBar';
 import { styles } from './ui';
 import type { Cell } from '../lib/share';
@@ -8,6 +8,21 @@ export default function DetailModal({ title, subtitle, headers, rows, footer, su
   title: string; subtitle?: string; headers: string[]; rows: Cell[][]; footer?: string[]; summary?: string; phone?: string; onClose: () => void;
 }) {
   const [q, setQ] = useState('');
+  // the browser / phone Back key closes the pop-up instead of leaving the page
+  useEffect(() => {
+    let popped = false;
+    const w = window as any;
+    w.__pommysModals = (w.__pommysModals || 0) + 1;
+    try { window.history.pushState({ pommysModal: true }, ''); } catch { /* ignore */ }
+    const onPop = (ev: Event) => { if (w.__pommysSkipEvent === ev || w.__pommysSkipPop) return; popped = true; onClose(); };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      w.__pommysModals = Math.max(0, (w.__pommysModals || 1) - 1);
+      if (!popped) { w.__pommysSkipPop = true; try { window.history.back(); } catch { w.__pommysSkipPop = false; } }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
     return t ? rows.filter(r => r.some(c => String(c ?? '').toLowerCase().includes(t))) : rows;
@@ -20,7 +35,7 @@ export default function DetailModal({ title, subtitle, headers, rows, footer, su
             <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#0f172a' }}>{title}</div>
             {subtitle && <div style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</div>}
           </div>
-          <button type="button" onClick={onClose} style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 'bold', cursor: 'pointer' }}>✕ Close</button>
+          <div style={{ display: 'flex', gap: '6px' }}><button type="button" onClick={onClose} style={{ background: '#e2e8f0', color: '#0f172a', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 'bold', cursor: 'pointer' }}>← Back</button><button type="button" onClick={onClose} style={{ background: '#fee2e2', color: '#b91c1c', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 'bold', cursor: 'pointer' }}>✕ Close</button></div>
         </div>
         <div style={{ padding: '10px 18px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #f1f5f9' }}>
           <input placeholder="🔍 தேடு..." value={q} onChange={e => setQ(e.target.value)} style={{ ...styles.input, maxWidth: '240px' }} />

@@ -134,6 +134,20 @@ const SECTIONS: Section[] = [
     tips: ['நிறம் பல இருந்தால் "Assorted" தேர்வு செய்யலாம்; இரண்டு நிறம் என்றால் Color 2-ஐயும் தேர்வு செய்யுங்கள்.', 'Cutting-ல் Material, Fit, Price ஒரு முறை போட்டால் Godown, Catalog வரை தானாக வரும்.']
   },
   {
+    key: 'all', icon: '📏', title: 'Size வாரியாக Qty, Rate / MRP, Photos, Colour Squares',
+    steps: [
+      'Production WIP-ல் மேலே Cutting / Stitching / QC Check / Packing Tab-கள் உண்டு; ஒவ்வொரு Tab-லும் அந்த Stage-ன் Stock மட்டும் தெரியும்.',
+      'நகர்த்தும்போது ஒவ்வொரு Size-க்கும் தனிக் கட்டம் வரும் (எ.கா. M 5, L 2). எதுவும் உள்ளிடாவிட்டால் மீதமுள்ள முழு Qty நகரும்; Damage-ம் Size வாரியாக உள்ளிடலாம்.',
+      'Godown → Showroom Transfer-லும் Size வாரியாக எத்தனை வேண்டுமானாலும் தேர்வு செய்யலாம். Showroom Sale / Return / Damage-லும் Size வாரியாக Qty; Rate & MRP தானாக வரும்; விற்பனை Slip-ஐ Print / WhatsApp செய்யலாம்.',
+      'Cutting-ல் ஒவ்வொரு Size வரியிலும் "Size Rate ₹" மற்றும் "Size MRP ₹" தரலாம். காலியாக விட்டால் மேலே உள்ள பொது Selling Price / MRP பயன்படும். MRP தனி; Selling Rate தனி.',
+      'Product Photo: முதலில் 1 கட்டம்; "+ Add Photo" மூலம் Back, Side, Close-up (அதிகபட்சம் 4). Colour Squares: முதலில் 1; "+ Add Colour" (அதிகபட்சம் 6). ஒவ்வொன்றிலும் Fabric Photo அல்லது Colour பெயர் (Assorted-உம் உண்டு).',
+      'Godown பட்டியலில் 🖼️ பொத்தானால் எந்த Design-க்கும் Photo / Colour Squares பின்னரும் சேர்க்கலாம். Catalog-ல் Photo வரிசை, Colour Square, MRP, Size Rate தெரியும்.',
+      'Busy Sales Import-ல் "Size column" இருந்தால் Size வாரியாகவே Stock குறையும்.',
+      'எந்தப் பக்கத்திலும் உள்ளே சென்றால் மேலே "← Back" பொத்தான் வரும்; Phone / Browser Back-உம் வேலை செய்யும்.'
+    ],
+    tips: ['பழைய Stock-க்கு Size விவரம் Cutting-ல் உள்ள Size விகிதத்தில் மதிப்பிடப்படும். "—" என்றால் Size தெரியாது.']
+  },
+  {
     key: 'security', icon: '🔐', title: 'Security & Admin (Admin மட்டும்)',
     steps: [
       'புதிய பயனர்: பெயர், Mobile, Password, Role (Admin / Office / Salesman / Customer) தேர்ந்து சேர்க்கவும்.',

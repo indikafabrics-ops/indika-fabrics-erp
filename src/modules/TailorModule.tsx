@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { supabase, fetchAll, errMsg } from '../lib/supabase';
 import { useMasters } from '../lib/useMasters';
 import { money, num } from '../lib/helpers';
+import RowActions from '../components/RowActions';
 import ShareBar from '../components/ShareBar';
 import { EmptyRow, ErrorBanner, Loading, SelectNew, TableWrap, notify, styles } from '../components/ui';
 
-export default function TailorModule() {
+export default function TailorModule({ user }: { user?: any }) {
   const masters = useMasters();
   const [entries, setEntries] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
@@ -196,7 +197,7 @@ export default function TailorModule() {
                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
                       {en.status === 'Issued' && <button type="button" onClick={() => setStatus(en, 'Received')} style={{ background: '#059669', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>✔ Received</button>}
                       {en.status === 'Received' && <button type="button" onClick={() => setStatus(en, 'Issued')} style={{ ...styles.secondaryBtn, padding: '4px 10px', fontSize: '11px' }}>Undo</button>}
-                      <button type="button" onClick={() => removeEntry(en)} style={{ ...styles.dangerBtn, padding: '4px 8px', fontSize: '11px' }}>🗑️</button>
+                      {user ? <RowActions user={user} table="pommys_tailor_ledger" row={en} label={`Tailor ${en.tailor_name} ${en.batch_code}`} fields={['tailor_name', 'batch_code', 'pieces', 'rate_per_pc', 'status']} onDone={load} /> : <button type="button" onClick={() => removeEntry(en)} style={{ ...styles.dangerBtn, padding: '4px 8px', fontSize: '11px' }}>🗑️</button>}
                     </div>
                   </td>
                 </tr>

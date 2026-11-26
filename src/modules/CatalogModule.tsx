@@ -3,7 +3,8 @@ import { fetchAll, errMsg } from '../lib/supabase';
 import { r3, num, uniqueSorted, computeShowroomLines } from '../lib/helpers';
 import { loadModelPhotos } from '../lib/batchMeta';
 import { loadBatchMeta } from '../lib/batchMeta';
-import { loadDesignMaster, designLookup } from '../lib/masterStore';
+import { loadDesignMaster, designLookup, type Swatch } from '../lib/masterStore';
+import { SwatchChips } from '../components/GallerySlots';
 import { loadBatchNames, nameFor } from '../lib/batchNames';
 import { ErrorBanner, ImagePreview, Loading, styles } from '../components/ui';
 
@@ -88,7 +89,7 @@ function FabricCatalog({ hideCostRate, hideStockQty }: { hideCostRate: boolean; 
 
 
 interface ColorLine { color: string; godown: number; showroom: number }
-interface GarmentCard { model: string; design: string; image: string; colorCount: number; colors: Map<string, ColorLine>; batches: Set<string>; names: Set<string>; material: string; fit: string; sizes: string; price: number }
+interface GarmentCard { model: string; design: string; image: string; colorCount: number; colors: Map<string, ColorLine>; batches: Set<string>; names: Set<string>; material: string; fit: string; sizes: string; price: number; mrp: number; photos: string[]; swatches: Swatch[]; rates: { size: string; price: number; mrp: number }[] }
 
 /** Salesman "menu card": one card per Model + Design with photo, colors and live stock. */
 function GarmentCatalog({ hideStockQty }: { hideStockQty: boolean }) {
@@ -122,7 +123,7 @@ function GarmentCatalog({ hideStockQty }: { hideStockQty: boolean }) {
           const c = String(col || '-').trim() || '-';
           const key = `${m}|${d}`.toLowerCase();
           let card = map.get(key);
-          if (!card) { const info = dm(m, d); card = { model: m, design: d, image: '', colorCount: 0, colors: new Map(), batches: new Set<string>(), names: new Set<string>(), material: info?.material || '', fit: info?.fit || '', sizes: info?.sizes || '', price: info?.price || 0 }; map.set(key, card); }
+          if (!card) { const info = dm(m, d); card = { model: m, design: d, image: '', colorCount: 0, colors: new Map(), batches: new Set<string>(), names: new Set<string>(), material: info?.material || '', fit: info?.fit || '', sizes: info?.sizes || '', price: info?.price || 0, mrp: info?.mrp || 0, photos: (info?.photos || []).filter(Boolean), swatches: info?.swatches || [], rates: Object.entries(info?.rates || {}).map(([size, r]) => ({ size, price: Number(r.price || info?.price || 0), mrp: Number(r.mrp || info?.mrp || 0) })) }; map.set(key, card); }
           if (batch) { card.batches.add(batch); if (nameFor(bnames, batch)) card.names.add(nameFor(bnames, batch)); }
           const ck = c.toLowerCase();
           const line = card.colors.get(ck) || { color: c, godown: 0, showroom: 0 };
@@ -146,6 +147,7 @@ function GarmentCatalog({ hideStockQty }: { hideStockQty: boolean }) {
             if (img) { card.image = card.image || img; }
           }
           if (!card.image) card.image = photoOf(card.model, card.design, '-');
+          if (!card.image && card.photos[0]) card.image = card.photos[0];
         });
         list.sort((a, b) => (a.model + a.design).localeCompare(b.model + b.design));
         setCards(list);
@@ -159,7 +161,7 @@ function GarmentCatalog({ hideStockQty }: { hideStockQty: boolean }) {
 
   const shareCard = (card: GarmentCard, lines: ColorLine[]) => {
     const colors = lines.map(l => l.color).filter(c => c && c !== '-').join(', ');
-    const text = [`*Pommys – ${card.model}*`, `Design: ${card.design}`, card.material ? `Material: ${card.material}` : '', card.fit ? `Fit: ${card.fit}` : '', card.sizes ? `Size: ${card.sizes}` : '', card.price > 0 ? `Price: ₹${card.price}` : '', colors ? `Colours: ${colors}` : '', card.image ? card.image : ''].filter(Boolean).join('\n');
+    const text = [`*Pommys – ${card.model}*`, `Design: ${card.design}`, card.material ? `Material: ${card.material}` : '', card.fit ? `Fit: ${card.fit}` : '', card.sizes ? `Size: ${card.sizes}` : '', card.price > 0 ? `Price: ₹${card.price}${card.mrp > 0 ? ` (MRP ₹${card.mrp})` : ''}` : '', card.rates.length ? `Size Rate: ${card.rates.map(r => `${r.size} ₹${r.price || '-'}${r.mrp ? '/' + r.mrp : ''}`).join(', ')}` : '', colors ? `Colours: ${colors}` : '', card.image ? card.image : ''].filter(Boolean).join('\n');
     window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
   };
 
@@ -168,7 +170,7 @@ function GarmentCatalog({ hideStockQty }: { hideStockQty: boolean }) {
     const body = shown.map(({ card, lines }) => `
       <div class="c">
         ${card.image ? `<img src="${esc(card.image)}"/>` : '<div class="np">No Photo</div>'}
-        <b>${esc(card.model)}</b><br/>Design: ${esc(card.design)}${card.colorCount > 0 ? ` • ${card.colorCount} Colours` : ''}${!hideStockQty && card.batches.size ? `<br/>Batch: ${esc(Array.from(card.batches).join(', '))}${card.names.size ? ' (' + esc(Array.from(card.names).join(', ')) + ')' : ''}` : ''}${card.material ? `<br/>Material: ${esc(card.material)}` : ''}${card.fit ? ` • Fit: ${esc(card.fit)}` : ''}${card.sizes ? `<br/>Size: ${esc(card.sizes)}` : ''}${card.price > 0 ? `<br/><b>Price: ₹${card.price}</b>` : ''}
+        <b>${esc(card.model)}</b><br/>Design: ${esc(card.design)}${card.colorCount > 0 ? ` • ${card.colorCount} Colours` : ''}${!hideStockQty && card.batches.size ? `<br/>Batch: ${esc(Array.from(card.batches).join(', '))}${card.names.size ? ' (' + esc(Array.from(card.names).join(', ')) + ')' : ''}` : ''}${card.material ? `<br/>Material: ${esc(card.material)}` : ''}${card.fit ? ` • Fit: ${esc(card.fit)}` : ''}${card.sizes ? `<br/>Size: ${esc(card.sizes)}` : ''}${card.price > 0 ? `<br/><b>Price: ₹${card.price}${card.mrp > 0 ? ` • MRP ₹${card.mrp}` : ''}</b>` : ''}${card.rates.length ? `<br/>Size Rate: ${esc(card.rates.map(r => `${r.size} ₹${r.price || '-'}${r.mrp ? '/' + r.mrp : ''}`).join(', '))}` : ''}
         <div class="cl">${lines.map(l => esc(l.color === '-' ? 'Stock' : l.color) + (hideStockQty ? '' : ` (${l.godown + l.showroom})`)).join(' • ')}</div>
       </div>`).join('');
     const w = window.open('', '_blank');
@@ -216,6 +218,12 @@ function GarmentCatalog({ hideStockQty }: { hideStockQty: boolean }) {
               ) : (
                 <div style={{ height: '190px', background: '#e2e8f0', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px', color: '#64748b', fontSize: '12px' }}>No Photo</div>
               )}
+              {card.photos.length > 1 && (
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                  {card.photos.map((u, i) => <img key={i} src={u} alt={['Front', 'Back', 'Side', 'Close-up'][i] || ''} title={['Front', 'Back', 'Side', 'Close-up'][i] || ''} loading="lazy" onClick={() => setPreview(u)} style={{ width: 42, height: 42, objectFit: 'cover', borderRadius: 4, border: '1px solid #cbd5e1', cursor: 'zoom-in' }} />)}
+                </div>
+              )}
+              {card.swatches.length > 0 && <div style={{ marginBottom: '8px' }}><SwatchChips swatches={card.swatches} size={34} /></div>}
               <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '15px' }}>{card.model}</div>
               <div style={{ fontSize: '13px', color: '#475569', marginBottom: '4px' }}>Design: {card.design}{card.colorCount > 0 ? ` • 🎨 ${card.colorCount} Colours` : ''}</div>
               <div style={{ fontSize: '12px', color: '#334155', marginBottom: '8px', lineHeight: 1.6 }}>
@@ -224,7 +232,9 @@ function GarmentCatalog({ hideStockQty }: { hideStockQty: boolean }) {
                 {card.material && <div>Material: <b>{card.material}</b></div>}
                 {card.fit && <div>Fit: <b>{card.fit}</b></div>}
                 {card.sizes && <div>Size: <b>{card.sizes}</b></div>}
-                {card.price > 0 && <div>Price: <b style={{ color: '#b91c1c' }}>₹{card.price}</b></div>}
+                {card.price > 0 && <div>Price: <b style={{ color: '#b91c1c' }}>₹{card.price}</b>{card.mrp > 0 && <> • MRP: <b>₹{card.mrp}</b></>}</div>}
+                {card.price === 0 && card.mrp > 0 && <div>MRP: <b>₹{card.mrp}</b></div>}
+                {card.rates.length > 0 && <div>Size Rate: {card.rates.map(r => <span key={r.size} style={{ marginRight: '6px' }}><b>{r.size}</b> ₹{r.price || '-'}{r.mrp ? `/${r.mrp}` : ''}</span>)}</div>}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {lines.map(l => {

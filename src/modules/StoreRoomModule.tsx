@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { supabase, fetchAll, errMsg } from '../lib/supabase';
 import { TRIM_UNITS } from '../lib/constants';
 import { num, uniqueSorted } from '../lib/helpers';
+import RowActions from '../components/RowActions';
 import ShareBar from '../components/ShareBar';
 import { EmptyRow, ErrorBanner, Loading, SelectNew, TableWrap, notify, styles } from '../components/ui';
 
-export default function StoreRoomModule() {
+export default function StoreRoomModule({ user }: { user?: any }) {
   const [trims, setTrims] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -143,10 +144,11 @@ export default function StoreRoomModule() {
               <th style={styles.thSub}>Available Qty</th>
               <th style={styles.thSub}>Min Level</th>
               <th style={styles.thSub}>Status</th>
+              {user && <th style={styles.thSub}>Action</th>}
             </tr>
           </thead>
           <tbody>
-            {trims.length === 0 ? <EmptyRow cols={5} text="Trims Stock எதுவும் இல்லை" /> : trims.map(t => {
+            {trims.length === 0 ? <EmptyRow cols={user ? 6 : 5} text="Trims Stock எதுவும் இல்லை" /> : trims.map(t => {
               const low = num(t.qty) <= num(t.reorder_level ?? 20);
               return (
                 <tr key={t.id} style={{ borderBottom: '1px solid #e2e8f0', background: low ? '#fffbeb' : 'white' }}>
@@ -157,6 +159,7 @@ export default function StoreRoomModule() {
                     <input type="number" min="0" defaultValue={t.reorder_level ?? 20} onBlur={e => saveMin(t, e.target.value)} style={{ ...styles.tblInput, width: '80px' }} />
                   </td>
                   <td style={styles.td}>{low ? '⚠️ Low Stock' : '✅ Sufficient'}</td>
+                  {user && <td style={styles.td}><RowActions user={user} table="pommys_store_trims" row={t} label={`Trim ${t.item_name}`} fields={['item_name', 'unit', 'qty', 'reorder_level']} onDone={load} /></td>}
                 </tr>
               );
             })}

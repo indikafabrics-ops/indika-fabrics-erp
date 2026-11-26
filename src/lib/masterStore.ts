@@ -25,6 +25,8 @@ export async function writeJson(path: string, obj: unknown): Promise<void> {
 }
 
 // ---------------------------------------------------------------- designs
+export interface Swatch { name: string; photo?: string }
+
 export interface DesignInfo {
   model: string;
   design: string;
@@ -32,6 +34,13 @@ export interface DesignInfo {
   fit?: string;
   sizes?: string; // "M, L, XL"
   price?: number;
+  mrp?: number;
+  /** size-wise selling rate / MRP: { M: {price: 450, mrp: 599} } */
+  rates?: Record<string, { price?: number; mrp?: number }>;
+  /** up to 4 product photos: Front, Back, Side, Close-up */
+  photos?: string[];
+  /** up to 6 colour squares: fabric photo and/or colour name */
+  swatches?: Swatch[];
 }
 
 const DESIGN_PATH = 'catalog/designs.json';
@@ -65,7 +74,11 @@ export async function saveDesignInfo(entries: DesignInfo[], opts?: { replaceSize
       material: e.material?.trim() || old.material,
       fit: e.fit?.trim() || old.fit,
       sizes,
-      price: e.price && e.price > 0 ? e.price : old.price
+      price: e.price && e.price > 0 ? e.price : old.price,
+      mrp: e.mrp && e.mrp > 0 ? e.mrp : old.mrp,
+      rates: e.rates ? { ...(old.rates || {}), ...e.rates } : old.rates,
+      photos: e.photos && e.photos.length ? e.photos : old.photos,
+      swatches: e.swatches && e.swatches.length ? e.swatches : old.swatches
     };
   });
   await writeJson(DESIGN_PATH, master);
@@ -102,4 +115,10 @@ export async function saveSupplierDetail(d: SupplierDetail): Promise<void> {
   });
   master[k] = merged;
   await writeJson(SUPPLIER_PATH, master);
+}
+
+/** selling rate & MRP for one size of a design (size-wise value first, then the design's general value) */
+export function rateFor(info: DesignInfo | undefined, size: string): { price: number; mrp: number } {
+  const r = info?.rates?.[size];
+  return { price: Number(r?.price || info?.price || 0), mrp: Number(r?.mrp || info?.mrp || 0) };
 }

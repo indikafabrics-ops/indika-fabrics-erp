@@ -2,7 +2,7 @@ import { useMemo, useState, type ChangeEvent } from 'react';
 import { supabase, fetchAll, errMsg } from '../lib/supabase';
 import { readTableFile } from '../lib/xlsx';
 import { parseCsv, parseDateLoose, parseQty } from '../lib/csv';
-import { computeShowroomLines, num, todayStr } from '../lib/helpers';
+import { computeShowroomLines, computeShowroomSizeLines, type ShowroomSizeLine, num, todayStr } from '../lib/helpers';
 import { notify, styles } from '../components/ui';
 
 const MAP_KEY = 'pommys_busy_item_map';
@@ -17,19 +17,21 @@ const HEAD_HINTS: Record<string, RegExp> = {
   bill: /bill|vch|voucher|invoice|inv|ref/i,
   item: /item|particular|product|description|name|article|பொருள்/i,
   qty: /qty|quantity|pcs|piece|nos|எண்/i,
-  showroom: /showroom|branch|godown|store|party|customer|shop|கடை/i
+  showroom: /showroom|branch|godown|store|party|customer|shop|கடை/i,
+  size: /^\s*(size|sz|அளவு)\s*$/i
 };
 
 interface Line { showroom: string; model: string; design: string; color: string; pcs: number }
-interface Row { id: number; date: string; dateGuess: boolean; bill: string; item: string; qty: number; showroom: string; line: string; note: string }
+interface Row { size: string; id: number; date: string; dateGuess: boolean; bill: string; item: string; qty: number; showroom: string; line: string; note: string }
 
 export default function BusyImport({ showrooms, onDone }: { showrooms: string[]; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [table, setTable] = useState<string[][]>([]);
   const [headerIdx, setHeaderIdx] = useState(0);
-  const [cols, setCols] = useState<Record<string, number>>({ date: -1, bill: -1, item: -1, qty: -1, showroom: -1 });
+  const [cols, setCols] = useState<Record<string, number>>({ date: -1, bill: -1, item: -1, qty: -1, showroom: -1, size: -1 });
   const [defaultShowroom, setDefaultShowroom] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
+  const [sizeLines, setSizeLines] = useState<ShowroomSizeLine[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
   const [paste, setPaste] = useState('');
@@ -51,7 +53,7 @@ export default function BusyImport({ showrooms, onDone }: { showrooms: string[];
     const h = guessHeader(t);
     setTable(t);
     setHeaderIdx(h);
-    const next: Record<string, number> = { date: -1, bill: -1, item: -1, qty: -1, showroom: -1 };
+    const next: Record<string, number> = { date: -1, bill: -1, item: -1, qty: -1, showroom: -1, size: -1 };
     t[h].forEach((c, i) => {
       (Object.keys(next) as string[]).forEach(k => { if (next[k] === -1 && HEAD_HINTS[k].test(c)) next[k] = i; });
     });
@@ -67,6 +69,7 @@ export default function BusyImport({ showrooms, onDone }: { showrooms: string[];
     try {
       const tr = await fetchAll('pommys_showroom_transfers', '*');
       setLines(computeShowroomLines(tr).filter(l => l.pcs > 0));
+      setSizeLines(computeShowroomSizeLines(tr));
     } catch (err: any) { notify('Showroom Stock load தோல்வி: ' + errMsg(err), 'err'); }
   };
 
@@ -120,7 +123,7 @@ export default function BusyImport({ showrooms, onDone }: { showrooms: string[];
       const k = `${bill || date || 'NA'}`;
       perBill[k] = (perBill[k] || 0) + 1;
       out.push({
-        id: i, date: date || todayStr(), dateGuess: !date, bill: `${k}-${perBill[k]}`, item, qty: Math.round(q), showroom,
+        size: cols.size >= 0 ? (r[cols.size] || '').trim().toUpperCase() : '', id: i, date: date || todayStr(), dateGuess: !date, bill: `${k}-${perBill[k]}`, item, qty: Math.round(q), showroom,
         line: showroom ? matchLine(item, showroom, remembered) : '', note
       });
     });
@@ -141,16 +144,24 @@ export default function BusyImport({ showrooms, onDone }: { showrooms: string[];
   const checked = useMemo(() => {
     const left = new Map<string, number>();
     lines.forEach(l => left.set(`${l.showroom.toLowerCase()}|${lineKey(l)}`, l.pcs));
+    const leftSz = new Map<string, number>();
+    sizeLines.forEach(l => leftSz.set(`${l.showroom.toLowerCase()}|${lineKey(l)}|${l.size.toUpperCase()}`, l.pcs));
     return rows.map(r => {
       if (!r.line || !r.showroom) return { r, ok: false, why: 'Item பொருத்த வேண்டும்' };
       if (r.note && !r.note.startsWith('Showroom')) return { r, ok: false, why: r.note };
       const k = `${r.showroom.toLowerCase()}|${r.line}`;
       const have = left.get(k) ?? 0;
       if (r.qty > have) return { r, ok: false, why: `Showroom-ல் ${have} Pcs மட்டுமே` };
+      if (r.size) {
+        const ks = `${k}|${r.size}`;
+        const haveSz = leftSz.get(ks);
+        if (haveSz !== undefined && r.qty > haveSz) return { r, ok: false, why: `Size ${r.size}: ${haveSz} Pcs மட்டுமே` };
+        if (haveSz !== undefined) leftSz.set(ks, haveSz - r.qty);
+      }
       left.set(k, have - r.qty);
       return { r, ok: true, why: '' };
     });
-  }, [rows, lines]);
+  }, [rows, lines, sizeLines]);
   const okCount = checked.filter(c => c.ok).length;
 
   const doImport = async () => {
@@ -175,7 +186,7 @@ export default function BusyImport({ showrooms, onDone }: { showrooms: string[];
         if (r.qty > have) { failed.push(`${r.item} (${r.qty} > ${have})`); continue; }
         const { error } = await supabase.from('pommys_showroom_transfers').insert([{
           challan_no: ref, transfer_date: r.date, showroom_name: r.showroom, batch_code: ref,
-          design_no: design, color, model_name: model, size_details: 'Busy Sale', transferred_pieces: -r.qty, status: 'Showroom Sale'
+          design_no: design, color, model_name: model, size_details: r.size ? `Busy Sale | Size ${r.size}` : 'Busy Sale', transferred_pieces: -r.qty, status: 'Showroom Sale'
         }]);
         if (error) { failed.push(`${r.item}: ${errMsg(error)}`); continue; }
         left.set(k, have - r.qty);
@@ -229,6 +240,7 @@ export default function BusyImport({ showrooms, onDone }: { showrooms: string[];
                 {colSel('item', 'Item column *')}
                 {colSel('qty', 'Qty column *')}
                 {colSel('showroom', 'Showroom column')}
+                {colSel('size', 'Size column (இருந்தால்)')}
                 <div>
                   <label style={styles.label}>Showroom (கோப்பில் இல்லையெனில்)</label>
                   <select value={defaultShowroom} onChange={e => setDefaultShowroom(e.target.value)} style={styles.input}>
@@ -246,7 +258,7 @@ export default function BusyImport({ showrooms, onDone }: { showrooms: string[];
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', minWidth: '820px', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead><tr style={{ background: '#0f172a', color: 'white' }}>
-                    <th style={styles.thSub}>Date</th><th style={styles.thSub}>Busy Item</th><th style={styles.thSub}>Qty</th>
+                    <th style={styles.thSub}>Date</th><th style={styles.thSub}>Busy Item</th><th style={styles.thSub}>Size</th><th style={styles.thSub}>Qty</th>
                     <th style={styles.thSub}>Showroom</th><th style={styles.thSub}>ERP Item (Model / Design / Color)</th><th style={styles.thSub}>நிலை</th>
                   </tr></thead>
                   <tbody>
@@ -254,6 +266,7 @@ export default function BusyImport({ showrooms, onDone }: { showrooms: string[];
                       <tr key={r.id} style={{ borderBottom: '1px solid #e2e8f0', background: ok ? undefined : '#fef2f2' }}>
                         <td style={styles.td}>{r.date}{r.dateGuess ? ' ⚠️' : ''}</td>
                         <td style={styles.td}>{r.item}</td>
+                        <td style={styles.td}>{r.size || '-'}</td>
                         <td style={styles.td}><b>{r.qty}</b></td>
                         <td style={styles.td}>
                           <select value={r.showroom} onChange={e => changeShowroom(r, e.target.value)} style={styles.tblInput}>
