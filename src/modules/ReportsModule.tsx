@@ -15,6 +15,9 @@ import { loadBatchNames } from '../lib/batchNames';
 import { loadSizeLedger, loadCutSizes, sizesFor, sortSizes, type SizeMap } from '../lib/sizeLedger';
 import { baseBatchCode, computeShowroomSizeLines } from '../lib/helpers';
 import { WIP_STAGES } from '../lib/constants';
+import { loadCostSheets, costAt, sheetFor, type CostSheet, type ValueStage } from '../lib/costSheets';
+import { loadDesignMaster, designLookup, rateFor, type DesignInfo } from '../lib/masterStore';
+import { parseModelLabel } from '../lib/helpers';
 import type { ShareDoc as ShareDocT } from '../lib/share';
 import { EmptyRow, ErrorBanner, ImagePreview, Loading, StatCard, TableWrap, styles } from '../components/ui';
 
@@ -41,6 +44,9 @@ export default function ReportsModule() {
   const [ledger, setLedger] = useState<Record<string, SizeMap>>({});
   const [cutSizes, setCutSizes] = useState<Record<string, SizeMap>>({});
   const [stage, setStage] = useState<string>('Cutting');
+  const [sheets, setSheets] = useState<Record<string, CostSheet>>({});
+  const [fabricRows, setFabricRows] = useState<any[]>([]);
+  const [designs, setDesigns] = useState<Record<string, DesignInfo>>({});
   const [fabric, setFabric] = useState<any[]>([]);
   const [exceptions, setExceptions] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
@@ -68,6 +74,9 @@ export default function ReportsModule() {
         loadBatchNames().then(setBnames).catch(() => undefined);
         loadSizeLedger().then(setLedger).catch(() => undefined);
         loadCutSizes().then(setCutSizes).catch(() => undefined);
+        loadCostSheets().then(setSheets).catch(() => undefined);
+        loadDesignMaster().then(setDesigns).catch(() => undefined);
+        fetchAll('pommys_fabric_stock', '*', q => q.gt('available_meters', 0.01)).then(setFabricRows).catch(() => undefined);
       } else if (which === 'godown') {
         const rows = await fetchAll('pommys_fabric_stock', '*', q => q.gt('available_meters', 0.01));
         setFabric(rows.reverse());
@@ -147,6 +156,48 @@ export default function ReportsModule() {
     headers: ['Model', 'Design', 'Colour', 'Size', ...locations, 'Total'],
     rows: sizeRows.map(r => [r.model, r.design, r.color, r.size, ...locations.map(l => r.loc[l] || 0), rowTotal(r)]),
     footer: [`மொத்தம்: ${sizeRows.reduce((a, r) => a + rowTotal(r), 0)} Pcs`]
+  };
+
+  // ---------- derived: stock value (cost from Cost Sheets, MRP from design master) ----------
+  const lookup = designLookup(designs);
+  const costPc = (model: string, st: ValueStage) => costAt(sheetFor(sheets, parseModelLabel(model).model), st);
+  const missingModels = new Set<string>();
+  const clothVal = fabricRows.reduce((a, f) => a + num(f.available_meters) * num(f.rate_per_meter), 0);
+  const clothNoRate = fabricRows.filter(f => !(num(f.rate_per_meter) > 0)).reduce((a, f) => a + num(f.available_meters), 0);
+  const valueRows: { label: string; qty: string; cost: number; mrp: number | null; noCost: number }[] = [
+    { label: '🧵 Cloth (Fabric Godown)', qty: r3(fabricRows.reduce((a, f) => a + num(f.available_meters), 0)) + ' M', cost: clothVal, mrp: null, noCost: clothNoRate }
+  ];
+  WIP_STAGES.forEach(st => {
+    let cost = 0, pcs = 0, noCost = 0;
+    wip.filter(w => w.current_status === st).forEach(w => {
+      const model = wipMeta[w.batch_code]?.model || parseModelLabel(String(w.model_name || '')).model;
+      const q = num(w.total_pieces); pcs += q;
+      const c = costPc(model, st as ValueStage);
+      if (c === undefined) { noCost += q; missingModels.add(model); } else cost += c * q;
+    });
+    valueRows.push({ label: (st === 'Cutting' ? '✂️ Cut Parts — ' : '🏭 ') + st, qty: pcs + ' Pcs', cost, mrp: null, noCost });
+  });
+  const readyVal = (loc: (l: string) => boolean) => {
+    let cost = 0, mrp = 0, pcs = 0, noCost = 0;
+    sizeRows.forEach(r => {
+      const q = locations.filter(loc).reduce((a, l) => a + (r.loc[l] || 0), 0);
+      if (!q) return; pcs += q;
+      const c = costPc(r.model, 'Ready');
+      if (c === undefined) { noCost += q; missingModels.add(r.model); } else cost += c * q;
+      mrp += rateFor(lookup(r.model, r.design), r.size).mrp * q;
+    });
+    return { cost, mrp, pcs, noCost };
+  };
+  const g1 = readyVal(l => l === GODOWN), g2 = readyVal(l => l !== GODOWN);
+  valueRows.push({ label: '👕 Godown Ready Goods', qty: g1.pcs + ' Pcs', cost: g1.cost, mrp: g1.mrp, noCost: g1.noCost });
+  valueRows.push({ label: '🏬 Showrooms (ERP)', qty: g2.pcs + ' Pcs', cost: g2.cost, mrp: g2.mrp, noCost: g2.noCost });
+  const valTotalCost = valueRows.reduce((a, r) => a + r.cost, 0);
+  const valTotalMrp = valueRows.reduce((a, r) => a + (r.mrp || 0), 0);
+  const valueDoc: ShareDocT = {
+    title: 'Stock Value — Stage வாரி', subtitle: 'Cost = Cost Sheet (Cloth + கூலி), MRP = Design MRP',
+    headers: ['Stage', 'Qty', 'Cost Value ₹', 'MRP Value ₹', 'Costing இல்லாதது'],
+    rows: valueRows.map(r => [r.label, r.qty, money(r.cost), r.mrp === null ? '-' : money(r.mrp), r.noCost ? `⚠️ ${r.noCost}` : '-']),
+    footer: [`மொத்தம் Cost: ₹ ${money(valTotalCost)}`, `Ready Goods MRP: ₹ ${money(valTotalMrp)}`, ...(missingModels.size ? [`⚠️ Costing போடவும்: ${Array.from(missingModels).join(', ')}`] : [])]
   };
 
   // ---------- derived: history ----------
@@ -261,6 +312,26 @@ export default function ReportsModule() {
           </TableWrap>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <h4 style={{ margin: 0, color: '#0f172a' }}>💰 Stock Value — Cloth → Cut Parts → Stage → Ready Goods</h4>
+            <ShareBar doc={valueDoc} />
+          </div>
+          {missingModels.size > 0 && <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px', padding: '10px 14px', fontSize: '13px' }}>⚠️ இந்த Model-க்கு Costing போடவில்லை (Value-ல் சேரவில்லை): <b>{Array.from(missingModels).join(', ')}</b> — Costing & Rate Fixer → 📋 Cost Sheet-ல் போடவும்.</div>}
+          <TableWrap minWidth={640}>
+            <thead><tr style={{ background: '#0f172a', color: 'white' }}>{['Stage', 'Qty', 'Cost Value ₹', 'MRP Value ₹', 'Costing இல்லாதது'].map(h => <th key={h} style={styles.thSub}>{h}</th>)}</tr></thead>
+            <tbody>
+              {valueRows.map(r => (
+                <tr key={r.label} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={styles.td}><b>{r.label}</b></td><td style={styles.td}>{r.qty}</td>
+                  <td style={{ ...styles.td, fontWeight: 'bold' }}>₹ {money(r.cost)}</td>
+                  <td style={styles.td}>{r.mrp === null ? '-' : '₹ ' + money(r.mrp)}</td>
+                  <td style={{ ...styles.td, color: r.noCost ? '#b45309' : '#94a3b8' }}>{r.noCost ? `⚠️ ${r.noCost}` : '-'}</td>
+                </tr>
+              ))}
+              <tr style={{ background: '#f1f5f9', fontWeight: 'bold' }}><td style={styles.td} colSpan={2}>மொத்தம்</td><td style={styles.td}>₹ {money(valTotalCost)}</td><td style={styles.td}>₹ {money(valTotalMrp)}</td><td style={styles.td} /></tr>
+            </tbody>
+          </TableWrap>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
             <h4 style={{ margin: 0, color: '#0f172a' }}>📏 Ready Goods — Size வாரியாக (Godown + Showroom)</h4>
             <ShareBar doc={sizeDoc} />
           </div>
@@ -290,7 +361,7 @@ export default function ReportsModule() {
               </button>
             ))}
           </div>
-          <StageReport wip={wip} meta={wipMeta} names={bnames} availOf={wipAvail} stage={stage} />
+          <StageReport wip={wip} meta={wipMeta} names={bnames} availOf={wipAvail} stage={stage} costOf={(model, st) => costPc(model, st as ValueStage)} />
         </div>
       )}
 

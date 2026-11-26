@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { fetchAll } from '../lib/supabase';
 import { money, num, r3 } from '../lib/helpers';
 import { Field, styles } from '../components/ui';
+import CostSheetEditor from '../components/CostSheetEditor';
 
 export default function CostingModule() {
+  const [ctab, setCtab] = useState<'sheet' | 'fixer'>('sheet');
   const [stock, setStock] = useState<any[]>([]);
   const [stockId, setStockId] = useState('');
   const [fabricRate, setFabricRate] = useState('');
@@ -35,8 +37,17 @@ export default function CostingModule() {
     <input type="number" min="0" step="any" value={value} onChange={e => set(e.target.value)} style={styles.input} {...extra} />
   );
 
+  const tabs = (
+    <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
+      {([['sheet', '📋 Cost Sheet (Model வாரி)'], ['fixer', '🧮 Rate Fixer']] as const).map(([k, l]) => (
+        <button key={k} type="button" onClick={() => setCtab(k)} style={{ ...styles.secondaryBtn, background: ctab === k ? '#1e293b' : 'transparent', color: ctab === k ? 'white' : '#475569' }}>{l}</button>
+      ))}
+    </div>
+  );
+  if (ctab === 'sheet') return <div style={styles.card}>{tabs}<CostSheetEditor /></div>;
   return (
     <div style={styles.card}>
+      {tabs}
       <h4 style={{ margin: '0 0 16px 0', color: '#0f172a' }}>🧮 Garment Costing & Rate Fixer</h4>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '14px', marginBottom: '20px' }}>
         <div style={{ gridColumn: 'span 2' }}>

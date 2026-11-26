@@ -3,6 +3,8 @@ import { baseBatchCode, num, r3 } from './helpers';
 import { loadBatchNames , nameFor } from './batchNames';
 import type { DrillDoc } from './drill';
 import { loadIndex, missingDates, ymd } from './tradeStock';
+import { loadCostSheets, modelKey } from './costSheets';
+import { parseModelLabel } from './helpers';
 
 export interface AlertCard { key: string; label: string; color: string; count: number; doc: DrillDoc }
 
@@ -65,8 +67,21 @@ export async function loadAlerts(): Promise<AlertCard[]> {
       doc: { title: 'Busy Upload பாக்கி', subtitle: 'கடந்த 7 நாள்', headers: ['கடை', 'Stock As On', 'Sales Upload இல்லாத தேதிகள்'], rows: rows.map(r => [r.sh, r.asOn + (r.stale ? ' ⚠️ பழையது' : ''), r.miss.join(', ') || '-']) } };
   } catch { upload = null; }
 
+  // models with stock but no Cost Sheet
+  let costing: AlertCard | null = null;
+  try {
+    const sheets = await loadCostSheets();
+    const cnt = new Map<string, number>();
+    wip.forEach((w: any) => { const m = parseModelLabel(String(w.model_name || '')).model; cnt.set(m, (cnt.get(m) || 0) + num(w.total_pieces)); });
+    ready.forEach((r: any) => { const m = String(r.model_name || '-'); cnt.set(m, (cnt.get(m) || 0) + num(r.ready_pieces)); });
+    const rows = Array.from(cnt.entries()).filter(([m, q]) => q > 0 && m !== '-' && !sheets[modelKey(m)]).sort((a, b) => b[1] - a[1]);
+    costing = { key: 'costing', label: 'Costing (Cost Sheet) போடாத Model', color: '#be123c', count: rows.length,
+      doc: { title: 'Costing போடவும்', subtitle: 'Costing & Rate Fixer → 📋 Cost Sheet', headers: ['Model', 'Stock Pcs'], rows: rows.map(([m, q]) => [m, q]) } };
+  } catch { costing = null; }
+
   return [
     ...(upload ? [upload] : []),
+    ...(costing ? [costing] : []),
     { key: 'slow', label: `${SLOW_FABRIC_DAYS} நாளுக்கு மேல் நகராத Fabric`, color: '#b45309', count: slow.length,
       doc: { title: 'மெதுவாக நகரும் Fabric', subtitle: `${SLOW_FABRIC_DAYS}+ நாள்`, headers: ['Item', 'Design', 'Color', 'Meters', 'நாள்'], rows: slow.map((f: any) => [f.item_name, f.design_no, f.color || '-', r3(num(f.available_meters)), days(f.created_at)]) } },
     { key: 'stuck', label: `${WIP_STUCK_DAYS} நாளுக்கு மேல் ஒரே Stage-ல் உள்ள Batch`, color: '#d97706', count: stuck.length,

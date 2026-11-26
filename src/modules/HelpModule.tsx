@@ -175,6 +175,17 @@ const SECTIONS: Section[] = [
     tips: ['Busy "Sales Price" தான் Cost ஆகக் கணக்கிடப்படும்.', 'Stock கோப்பிற்கு பிறகான Sales தானாக கழிக்கப்பட்டு தற்போதைய Stock காட்டும்.']
   },
   {
+    key: 'costing', icon: '📋', title: 'Cost Sheet & Stock Value (Cloth → Ready Goods)',
+    steps: [
+      '"Costing & Rate Fixer" → 📋 Cost Sheet: Model தேர்வு செய்து Consumption (Meter/Pc) மற்றும் Cloth Rate போடவும்.',
+      'Cut to Pack வரிசையில் (Cutting, Assorting, Stitching, Overlock, Label, Button, Tag, Packing, Freight…) ஒவ்வொன்றுக்கும் ₹/Pc போடவும். ஒவ்வொரு வரியும் எந்த Stage-க்கு உரியது என்பதைத் தேர்வு செய்யலாம்.',
+      'Cloth + Cut to Pack = Costing. சேமித்தால் Master Reports → 💰 Stock Value மற்றும் Production Stage Report-ல் Value தானாக வரும்.',
+      'Value Stage வாரி கூடும்: Cloth → Cut Parts (Cloth + Cutting) → Stitching → QC → Packing → Ready Goods (Overhead சேர்த்து முழு Cost).',
+      'Costing போடாத Model வரி "⚠️ Costing போடவும்" என்று காட்டும்; அதன் Value மொத்தத்தில் சேராது. Dashboard-லும் எச்சரிக்கை வரும்.'
+    ],
+    tips: ['Ready Goods MRP Value, Cutting-ல் போட்ட MRP-லிருந்து வரும்.', 'Cost Sheet Model பெயரில் சேமிக்கப்படுகிறது (Size வாரி மாறுபாடு இல்லை).']
+  },
+  {
     key: 'all', icon: '📊', title: 'Production Stage Report',
     steps: [
       'Production WIP → கீழே "Stage Report": தேர்வு செய்த Stage-ல் Model / Design / Colour வாரி Size-wise எண்ணிக்கை மற்றும் மொத்தம்.',
