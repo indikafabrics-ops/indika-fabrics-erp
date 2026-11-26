@@ -6,6 +6,7 @@ export interface BatchMeta {
   model: string;
   design: string;
   color: string;
+  size?: string;
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {

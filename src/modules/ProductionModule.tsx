@@ -5,9 +5,10 @@ import { WIP_STAGES } from '../lib/constants';
 import { baseBatchCode, num } from '../lib/helpers';
 import { logAction } from '../lib/audit';
 import { loadBatchNames , nameFor } from '../lib/batchNames';
-import { loadSizeLedger, loadCutSizes, saveSizeUpdates, sizesFor, sumSizes, fmtSizes, type SizeMap } from '../lib/sizeLedger';
+import { loadSizeLedger, loadCutSizes, saveSizeUpdates, sizesFor, sumSizes, fmtSizes, sortSizes, type SizeMap } from '../lib/sizeLedger';
 import SizeQty from '../components/SizeQty';
 import RowActions from '../components/RowActions';
+import StageReport from '../components/StageReport';
 import ShareBar from '../components/ShareBar';
 import { EmptyRow, ErrorBanner, Loading, TableWrap, notify, styles } from '../components/ui';
 
@@ -61,6 +62,13 @@ export default function ProductionModule({ user }: { user?: any }) {
 
   useEffect(() => { load(); }, [load]);
 
+  /** sizes of a WIP row: size ledger -> Cutting sizes -> size written in an opening-stock label ("... - XL SIZE") */
+  const availOf = (code: string, total: number): SizeMap => {
+    const own = ledger[code];
+    if ((!own || !Object.keys(own).length) && !cutSizes[baseBatchCode(code)] && meta[code]?.size) return total > 0 ? { [meta[code].size as string]: total } : {};
+    return sizesFor(code, total, ledger, cutSizes);
+  };
+
   const handleMove = async (batch: any, newStatus: string) => {
     if (busyId) return;
     setBusyId(batch.id);
@@ -77,7 +85,7 @@ export default function ProductionModule({ user }: { user?: any }) {
       }
 
       const total = Math.floor(num(b.total_pieces));
-      const avail = sizesFor(b.batch_code, total, ledger, cutSizes);
+      const avail = availOf(b.batch_code, total);
       const dmgIn = damageBy[key] || {};
       const movIn = moveBy[key] || {};
       const dmgBy: SizeMap = {}; const movBy: SizeMap = {};
@@ -203,7 +211,7 @@ export default function ProductionModule({ user }: { user?: any }) {
         {error && <ErrorBanner message={error} onRetry={load} />}
         {!loading && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-            <ShareBar doc={{ title: `Production WIP – ${tab}`, headers: ['Batch Code', 'Local Name', 'Stage', 'Model', 'Design', 'Color', 'Sizes', 'Pcs'], rows: shown.map(b => [b.batch_code, nameFor(names, b.batch_code) || '-', b.current_status, b.model_name || meta[b.batch_code]?.model || '-', meta[b.batch_code]?.design || '-', meta[b.batch_code]?.color || '-', fmtSizes(sizesFor(b.batch_code, Math.floor(num(b.total_pieces)), ledger, cutSizes)), num(b.total_pieces)]), footer: [`மொத்தம்: ${shown.reduce((a, b) => a + num(b.total_pieces), 0)} Pcs`] }} />
+            <ShareBar doc={{ title: `Production WIP – ${tab}`, headers: ['Batch Code', 'Local Name', 'Stage', 'Model', 'Design', 'Color', 'Sizes', 'Pcs'], rows: shown.map(b => [b.batch_code, nameFor(names, b.batch_code) || '-', b.current_status, b.model_name || meta[b.batch_code]?.model || '-', meta[b.batch_code]?.design || '-', meta[b.batch_code]?.color || '-', fmtSizes(availOf(b.batch_code, Math.floor(num(b.total_pieces)))), num(b.total_pieces)]), footer: [`மொத்தம்: ${shown.reduce((a, b) => a + num(b.total_pieces), 0)} Pcs`] }} />
           </div>
         )}
         {loading ? <Loading /> : (
@@ -223,12 +231,12 @@ export default function ProductionModule({ user }: { user?: any }) {
               {shown.length === 0 ? <EmptyRow cols={7} text={`${tab}-ல் Active Batch எதுவும் இல்லை`} /> : shown.map(batch => {
                 const m = meta[batch.batch_code];
                 const key = String(batch.id);
-                const avail = sizesFor(batch.batch_code, Math.floor(num(batch.total_pieces)), ledger, cutSizes);
+                const avail = availOf(batch.batch_code, Math.floor(num(batch.total_pieces)));
                 return (
                   <tr key={batch.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                     <td style={styles.td}><strong>{batch.batch_code}</strong>{nameFor(names, batch.batch_code) && <div style={{ fontSize: '11px', color: '#7c3aed', fontWeight: 'bold' }}>{nameFor(names, batch.batch_code)}</div>}</td>
                     <td style={styles.td}>{m?.model || batch.model_name}</td>
-                    <td style={styles.td}>{m ? `${m.design}${m.color && m.color !== '-' ? ` / ${m.color}` : ''}` : '-'}</td>
+                    <td style={styles.td}>{m ? `${m.design}${m.color && m.color !== '-' ? ` / ${m.color}` : ''}` : '-'}{m?.size ? <div style={{ fontSize: '11px', color: '#475569' }}>Size {m.size}</div> : null}</td>
                     <td style={styles.td}><strong>{batch.total_pieces}</strong><div style={{ fontSize: '11px', color: '#64748b' }}>{fmtSizes(avail)}</div></td>
                     <td style={styles.td}>
                       <SizeQty avail={avail} value={moveBy[key] || {}} onChange={v => setMoveBy(prev => ({ ...prev, [key]: v }))} placeholder="All" />
@@ -251,6 +259,8 @@ export default function ProductionModule({ user }: { user?: any }) {
           </TableWrap>
         )}
       </div>
+
+      <StageReport wip={wip} meta={meta} names={names} availOf={availOf} stage={tab} />
     </div>
   );
 }

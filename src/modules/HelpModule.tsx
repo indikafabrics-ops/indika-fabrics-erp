@@ -163,6 +163,27 @@ const SECTIONS: Section[] = [
     ]
   },
   {
+    key: 'trading', icon: '📦', title: 'Busy Stock & Sales Upload (12 கடைகள்)',
+    steps: [
+      '"📦 Busy Stock & Sales" → ⬆️ Upload: Busy-ல் இருந்து BCN-wise Stock Status (xlsx) மற்றும் Sales Analysis (xlsx) கோப்புகளை ஒரே நேரத்தில் பல கோப்புகளாகவும் தேர்வு செய்யலாம்.',
+      'கடை பெயர், தேதி கோப்பின் மேல் வரிகளிலிருந்து தானாக எடுக்கப்படும். சரிபார்த்து (புதியது / மாறியது / நீக்கப்பட்டது) பின் Save செய்யவும்.',
+      'Stock = அந்தத் தேதிக்கான முழு Snapshot (மீண்டும் போட்டால் பழையதை மாற்றும்). Sales = தேதி வாரி மாற்றம் (அதே தேதியை மீண்டும் போட்டால் இரட்டிப்பாகாது).',
+      'தினசரி, வாரம், மாதம் என எந்த வரம்பிலும் Upload செய்யலாம். தவறு இருந்தால் (Total பொருந்தவில்லை, எதிர்கால தேதி) Save ஆகாது.',
+      '📅 Upload நிலை: எந்தக் கடைக்கு எந்தத் தேதி Upload ஆகவில்லை என்று காட்டும்; பாக்கி தேதிகளை WhatsApp-ல் அனுப்பலாம்.',
+      '📦 Stock Report: கடை வாரி / Item → Size → Colour வாரி Stock, Cost (Busy Sales Price), MRP, Margin. 🧾 Sales Report: கடை / Size / Item / நாள் வாரி.'
+    ],
+    tips: ['Busy "Sales Price" தான் Cost ஆகக் கணக்கிடப்படும்.', 'Stock கோப்பிற்கு பிறகான Sales தானாக கழிக்கப்பட்டு தற்போதைய Stock காட்டும்.']
+  },
+  {
+    key: 'all', icon: '📊', title: 'Production Stage Report',
+    steps: [
+      'Production WIP → கீழே "Stage Report": தேர்வு செய்த Stage-ல் Model / Design / Colour வாரி Size-wise எண்ணிக்கை மற்றும் மொத்தம்.',
+      'அதன் கீழ் எல்லா Stage-ன் Batch, Pcs, பழைய Batch நாள் ஒரே அட்டவணையில்.',
+      'Opening Stock "… - XXL SIZE" என்றிருந்தால் அது Design அல்ல, Size ஆகக் கருதப்படும்.',
+      'Print / PDF / WhatsApp / Excel பொத்தான்கள் மூலம் அறிக்கையை பகிரலாம்.'
+    ]
+  },
+  {
     key: 'all', icon: '⚠️', title: 'பொதுவான தவறுகள் (தவிர்க்க)',
     steps: [
       'ஒரே Stock-ஐ இரண்டு முறை பதிவு செய்வது (குறிப்பாக Opening Stock).',

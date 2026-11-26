@@ -3,6 +3,7 @@ import { computeShowroomLines, mergeExceptionRows, money, num, r3 } from './help
 import { loadBatchMeta } from './batchMeta';
 import { loadBatchNames , nameFor } from './batchNames';
 import { loadDesignMaster, designLookup } from './masterStore';
+import { loadSizeLedger, loadCutSizes, sizesFor, fmtSizes } from './sizeLedger';
 import type { Cell } from './share';
 
 export type DrillKind = 'fabric' | 'wip' | 'godown' | 'showroom' | 'endbit' | 'damage';
@@ -33,14 +34,17 @@ export async function loadDrill(kind: DrillKind): Promise<DrillDoc> {
   }
   if (kind === 'wip') {
     const wip = await fetchAll('pommys_production_wip', '*', q => q.neq('current_status', 'Ready Stock'));
-    const [meta, names] = await Promise.all([loadBatchMeta(wip), loadBatchNames().catch(() => ({} as Record<string, string>))]);
+    const [meta, names, ledger, cut] = await Promise.all([loadBatchMeta(wip), loadBatchNames().catch(() => ({} as Record<string, string>)), loadSizeLedger().catch(() => ({})), loadCutSizes().catch(() => ({}))]);
     const rows: Cell[][] = wip.map((w: any) => {
       const m = meta[w.batch_code];
-      return [w.batch_code, nameFor(names, w.batch_code) || '-', w.current_status, w.model_name || m?.model || '-', m?.design || '-', m?.color || '-', num(w.total_pieces), age(w.updated_at || w.created_at)];
+      const sz = m?.size ? `${m.size}:${num(w.total_pieces)}` : fmtSizes(sizesFor(w.batch_code, Math.floor(num(w.total_pieces)), ledger, cut)).replace('—:', '');
+      return [w.batch_code, nameFor(names, w.batch_code) || '-', w.current_status, m?.model || w.model_name || '-', m?.design || '-', sz || '-', m?.color || '-', num(w.total_pieces), age(w.updated_at || w.created_at)];
     });
-    rows.sort((a, b) => String(a[2]).localeCompare(String(b[2])) || String(a[0]).localeCompare(String(b[0])));
+    rows.sort((a, b) => String(a[2]).localeCompare(String(b[2])) || String(a[3]).localeCompare(String(b[3])) || String(a[0]).localeCompare(String(b[0])));
     const tot = wip.reduce((a: number, w: any) => a + num(w.total_pieces), 0);
-    return { title: 'Production WIP (Pcs)', headers: ['Batch Code', 'Local Name', 'Stage', 'Model', 'Design', 'Color', 'Pcs', 'Age'], rows, footer: [`மொத்தம்: ${tot} Pcs • ${wip.length} Batch`], summary: `WIP மொத்தம் ${tot} Pcs (${wip.length} Batch)` };
+    const stages: Record<string, number> = {};
+    wip.forEach((w: any) => { stages[w.current_status] = (stages[w.current_status] || 0) + num(w.total_pieces); });
+    return { title: 'Production WIP (Pcs)', headers: ['Batch Code', 'Local Name', 'Stage', 'Model', 'Design', 'Size', 'Color', 'Pcs', 'Age'], rows, footer: [`மொத்தம்: ${tot} Pcs • ${wip.length} Batch`, Object.entries(stages).map(([k, v]) => `${k}: ${v}`).join(' • ')], summary: `WIP மொத்தம் ${tot} Pcs (${wip.length} Batch) — ${Object.entries(stages).map(([k, v]) => `${k} ${v}`).join(', ')}` };
   }
   if (kind === 'godown') {
     const ready = (await fetchAll('pommys_ready_stock', '*')).filter((r: any) => num(r.ready_pieces) > 0);

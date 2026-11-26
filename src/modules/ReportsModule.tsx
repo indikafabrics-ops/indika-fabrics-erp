@@ -9,6 +9,12 @@ import { loadSupplierMaster } from '../lib/masterStore';
 import { printDoc, docToText, openWhatsApp } from '../lib/share';
 import ShareBar from '../components/ShareBar';
 import InsightsReport from './InsightsReport';
+import StageReport from '../components/StageReport';
+import { loadBatchMeta, type BatchMeta } from '../lib/batchMeta';
+import { loadBatchNames } from '../lib/batchNames';
+import { loadSizeLedger, loadCutSizes, sizesFor, sortSizes, type SizeMap } from '../lib/sizeLedger';
+import { baseBatchCode, computeShowroomSizeLines } from '../lib/helpers';
+import { WIP_STAGES } from '../lib/constants';
 import type { ShareDoc as ShareDocT } from '../lib/share';
 import { EmptyRow, ErrorBanner, ImagePreview, Loading, StatCard, TableWrap, styles } from '../components/ui';
 
@@ -29,6 +35,12 @@ export default function ReportsModule() {
   const [snapshot, setSnapshot] = useState<StockSnapshot | null>(null);
   const [readyStock, setReadyStock] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
+  const [wip, setWip] = useState<any[]>([]);
+  const [wipMeta, setWipMeta] = useState<Record<string, BatchMeta>>({});
+  const [bnames, setBnames] = useState<Record<string, string>>({});
+  const [ledger, setLedger] = useState<Record<string, SizeMap>>({});
+  const [cutSizes, setCutSizes] = useState<Record<string, SizeMap>>({});
+  const [stage, setStage] = useState<string>('Cutting');
   const [fabric, setFabric] = useState<any[]>([]);
   const [exceptions, setExceptions] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
@@ -50,6 +62,12 @@ export default function ReportsModule() {
         setSnapshot(snap);
         setReadyStock(ready.filter(r => num(r.ready_pieces) > 0));
         setTransfers(trf);
+        const w = await fetchAll('pommys_production_wip', '*', q => q.neq('current_status', 'Ready Stock'));
+        setWip(w);
+        setWipMeta(await loadBatchMeta(w));
+        loadBatchNames().then(setBnames).catch(() => undefined);
+        loadSizeLedger().then(setLedger).catch(() => undefined);
+        loadCutSizes().then(setCutSizes).catch(() => undefined);
       } else if (which === 'godown') {
         const rows = await fetchAll('pommys_fabric_stock', '*', q => q.gt('available_meters', 0.01));
         setFabric(rows.reverse());
@@ -100,6 +118,36 @@ export default function ReportsModule() {
   const matrix = Array.from(matrixMap.values()).sort((a, b) => (a.model + a.design + a.color).localeCompare(b.model + b.design + b.color));
   const locations = [GODOWN, ...showroomNames];
   const rowTotal = (r: any) => Object.values(r.loc as Record<string, number>).reduce((s, v) => s + v, 0);
+
+  // ---------- derived: size-wise ready goods + WIP sizes ----------
+  const wipAvail = (code: string, total: number): SizeMap => {
+    const own = ledger[code];
+    const sz = wipMeta[code]?.size;
+    if ((!own || !Object.keys(own).length) && !cutSizes[baseBatchCode(code)] && sz) return total > 0 ? { [sz]: total } : {};
+    return sizesFor(code, total, ledger, cutSizes);
+  };
+  const sizeMap = new Map<string, any>();
+  const addSz = (model: string, design: string, color: string, size: string, loc: string, pcs: number) => {
+    const m = String(model || '-'), d = String(design || '-'), c = String(color || '-'), z = String(size || '—');
+    const key = [m, d, c, z].map(x => x.toLowerCase()).join('|');
+    const row = sizeMap.get(key) || { model: m, design: d, color: c, size: z, loc: {} as Record<string, number> };
+    row.loc[loc] = (row.loc[loc] || 0) + pcs;
+    sizeMap.set(key, row);
+  };
+  readyStock.forEach(r => {
+    const tot = Math.floor(num(r.ready_pieces));
+    const by = sizesFor(String(r.batch_code || ''), tot, ledger, cutSizes);
+    if (!Object.keys(by).length) addSz(r.model_name, r.design_no, r.color, '—', GODOWN, tot);
+    else Object.entries(by).forEach(([z, q]) => addSz(r.model_name, r.design_no, r.color, z, GODOWN, q));
+  });
+  computeShowroomSizeLines(transfers).filter(l => l.pcs !== 0).forEach(l => addSz(l.model, l.design, l.color, l.size, l.showroom, l.pcs));
+  const sizeRows = Array.from(sizeMap.values()).sort((a, b) => (a.model + a.design + a.color).localeCompare(b.model + b.design + b.color) || sortSizes(a.size, b.size));
+  const sizeDoc: ShareDocT = {
+    title: 'Ready Goods — Size வாரி',
+    headers: ['Model', 'Design', 'Colour', 'Size', ...locations, 'Total'],
+    rows: sizeRows.map(r => [r.model, r.design, r.color, r.size, ...locations.map(l => r.loc[l] || 0), rowTotal(r)]),
+    footer: [`மொத்தம்: ${sizeRows.reduce((a, r) => a + rowTotal(r), 0)} Pcs`]
+  };
 
   // ---------- derived: history ----------
   const supplierOptions = uniqueSorted(history.map(h => h.supplier_name));
@@ -211,6 +259,38 @@ export default function ReportsModule() {
               )}
             </tbody>
           </TableWrap>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <h4 style={{ margin: 0, color: '#0f172a' }}>📏 Ready Goods — Size வாரியாக (Godown + Showroom)</h4>
+            <ShareBar doc={sizeDoc} />
+          </div>
+          <TableWrap minWidth={620 + locations.length * 90}>
+            <thead>
+              <tr style={{ background: '#0f172a', color: 'white' }}>
+                <th style={styles.thSub}>Model</th><th style={styles.thSub}>Design</th><th style={styles.thSub}>Color</th><th style={styles.thSub}>Size</th>
+                {locations.map(l => <th key={l} style={{ ...styles.thSub, background: l === GODOWN ? '#065f46' : '#0c4a6e' }}>{l}</th>)}
+                <th style={{ ...styles.thSub, background: '#7c2d12' }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sizeRows.length === 0 ? <EmptyRow cols={5 + locations.length} text="Ready Stock எதுவும் இல்லை." /> : sizeRows.map((r, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <td style={styles.td}><strong>{r.model}</strong></td><td style={styles.td}>{r.design}</td><td style={styles.td}>{r.color}</td><td style={styles.td}><b>{r.size}</b></td>
+                  {locations.map(l => <td key={l} style={{ ...styles.td, color: r.loc[l] ? '#0f172a' : '#cbd5e1' }}>{r.loc[l] || 0}</td>)}
+                  <td style={{ ...styles.td, fontWeight: 'bold', background: '#fff7ed' }}>{rowTotal(r)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </TableWrap>
+
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {WIP_STAGES.map(st => (
+              <button key={st} type="button" onClick={() => setStage(st)} style={{ ...styles.secondaryBtn, background: stage === st ? '#1e293b' : 'transparent', color: stage === st ? 'white' : '#475569' }}>
+                {st} ({wip.filter(w => w.current_status === st).reduce((a, w) => a + num(w.total_pieces), 0)})
+              </button>
+            ))}
+          </div>
+          <StageReport wip={wip} meta={wipMeta} names={bnames} availOf={wipAvail} stage={stage} />
         </div>
       )}
 

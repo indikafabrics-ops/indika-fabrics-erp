@@ -12,6 +12,7 @@ export type MenuKey =
   | 'tailor'
   | 'reports'
   | 'analysis'
+  | 'trading'
   | 'records'
   | 'approvals'
   | 'security'
@@ -29,6 +30,7 @@ export const ALL_MENU_KEYS: MenuKey[] = [
   'tailor',
   'reports',
   'analysis',
+  'trading',
   'records',
   'approvals',
   'security',
@@ -46,6 +48,7 @@ export const MENU_ITEMS: { key: MenuKey; label: string; title: string; roles: Us
   { key: 'costing', label: '🧮 Costing & Rate Fixer', title: 'Garment Costing & Wholesale/Retail Rate Fixer', roles: ['ADMIN'] },
   { key: 'tailor', label: '🧵 Tailor Ledger & Jobwork', title: 'Tailor & Stitching Job-Work Ledger', roles: ['ADMIN', 'OFFICE'] },
   { key: 'reports', label: '📊 Master Reports & Export', title: 'Stock Summary, Godown, Showroom, End-Bit/Damage & Supplier Reports', roles: ['ADMIN', 'OFFICE'] },
+  { key: 'trading', label: '📦 Busy Stock & Sales', title: 'Busy Stock / Sales Upload, Trading Stock & Sales Reports', roles: ['ADMIN', 'OFFICE'] },
   { key: 'analysis', label: '🔎 Search & Analysis', title: 'Search, Batch Timeline, Profit, Daily Summary', roles: ['ADMIN', 'OFFICE'] },
   { key: 'records', label: '✏️ Edit / Delete Records', title: 'Edit / Delete Records (Admin Approval)', roles: ['ADMIN', 'OFFICE'] },
   { key: 'approvals', label: '✅ Approvals', title: 'Edit / Delete Approvals (Admin)', roles: ['ADMIN'] },

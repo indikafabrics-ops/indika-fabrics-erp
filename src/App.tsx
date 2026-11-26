@@ -9,6 +9,7 @@ import DashboardHome from './modules/DashboardHome';
 import GRNModule from './modules/GRNModule';
 import CuttingModule from './modules/CuttingModule';
 import ProductionModule from './modules/ProductionModule';
+import TradingModule from './modules/TradingModule';
 import StoreRoomModule from './modules/StoreRoomModule';
 import ReadyStockModule from './modules/ReadyStockModule';
 import CatalogModule from './modules/CatalogModule';
@@ -232,6 +233,7 @@ function Shell({ user, onLogout }: { user: any; onLogout: () => void }) {
       case 'costing': return <CostingModule />;
       case 'tailor': return <TailorModule user={user} />;
       case 'reports': return <ReportsModule />;
+      case 'trading': return <TradingModule user={user} />;
       case 'analysis': return <AnalysisModule user={user} onNavigate={select} />;
       case 'records': return <RecordsModule user={user} />;
       case 'approvals': return <ApprovalsModule admin={user} />;

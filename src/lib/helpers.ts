@@ -60,11 +60,16 @@ export function baseBatchCode(code: string): string {
 }
 
 /** "Nighty - D12 (Red)" -> { model: 'Nighty', design: 'D12', color: 'Red' } */
-export function parseModelLabel(label: string): { model: string; design: string; color: string } {
+export function parseModelLabel(label: string): { model: string; design: string; color: string; size?: string } {
   const text = String(label || '').trim();
   const m = text.match(/^(.*?)(?: - ([^()]+?))?(?: \(([^)]+)\))?$/);
   if (!m) return { model: text, design: '-', color: '-' };
-  return { model: (m[1] || text).trim(), design: (m[2] || '-').trim(), color: (m[3] || '-').trim() };
+  let design = (m[2] || '-').trim();
+  let size: string | undefined;
+  // "JASMINE NIGHTY - XXL SIZE" : the part after " - " is a SIZE, not a design number
+  const sz = design.match(/^(XXS|XS|XXL|XL|[2-6]\s?XL|S|M|L|FREE)\s*SIZE$/i);
+  if (sz) { size = sz[1].replace(/\s+/g, '').toUpperCase(); if (size === 'FREE') size = 'Free'; design = '-'; }
+  return { model: (m[1] || text).trim(), design, color: (m[3] || '-').trim(), ...(size ? { size } : {}) };
 }
 
 export function downloadCsv(filename: string, rows: (string | number)[][]) {

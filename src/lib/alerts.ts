@@ -2,6 +2,7 @@ import { fetchAll } from './supabase';
 import { baseBatchCode, num, r3 } from './helpers';
 import { loadBatchNames , nameFor } from './batchNames';
 import type { DrillDoc } from './drill';
+import { loadIndex, missingDates, ymd } from './tradeStock';
 
 export interface AlertCard { key: string; label: string; color: string; count: number; doc: DrillDoc }
 
@@ -50,7 +51,22 @@ export async function loadAlerts(): Promise<AlertCard[]> {
     return { b, d, tot, pct: tot > 0 ? (d / tot) * 100 : 0, model: c?.product_model || '-' };
   }).filter(x => x.tot > 0 && x.pct >= HIGH_DAMAGE_PCT).sort((a, b) => b.pct - a.pct);
 
+  // Busy uploads that are still pending (shops that already started uploading)
+  let upload: AlertCard | null = null;
+  try {
+    const ix = await loadIndex();
+    const old = ymd(new Date(Date.now() - 7 * 86400000));
+    const rows = Object.keys(ix).sort().map(sh => {
+      const miss = missingDates(ix[sh], 7);
+      const stale = !ix[sh].stockAsOn || ix[sh].stockAsOn! < old;
+      return { sh, miss, stale, asOn: ix[sh].stockAsOn || '-' };
+    }).filter(r => r.miss.length > 0 || r.stale);
+    upload = { key: 'upload', label: 'Busy Sales / Stock Upload பாக்கி உள்ள கடைகள்', color: '#0369a1', count: rows.length,
+      doc: { title: 'Busy Upload பாக்கி', subtitle: 'கடந்த 7 நாள்', headers: ['கடை', 'Stock As On', 'Sales Upload இல்லாத தேதிகள்'], rows: rows.map(r => [r.sh, r.asOn + (r.stale ? ' ⚠️ பழையது' : ''), r.miss.join(', ') || '-']) } };
+  } catch { upload = null; }
+
   return [
+    ...(upload ? [upload] : []),
     { key: 'slow', label: `${SLOW_FABRIC_DAYS} நாளுக்கு மேல் நகராத Fabric`, color: '#b45309', count: slow.length,
       doc: { title: 'மெதுவாக நகரும் Fabric', subtitle: `${SLOW_FABRIC_DAYS}+ நாள்`, headers: ['Item', 'Design', 'Color', 'Meters', 'நாள்'], rows: slow.map((f: any) => [f.item_name, f.design_no, f.color || '-', r3(num(f.available_meters)), days(f.created_at)]) } },
     { key: 'stuck', label: `${WIP_STUCK_DAYS} நாளுக்கு மேல் ஒரே Stage-ல் உள்ள Batch`, color: '#d97706', count: stuck.length,

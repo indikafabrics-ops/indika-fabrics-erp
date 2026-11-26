@@ -73,3 +73,11 @@ Sidebar → "📖 உதவி / Guide": Tamil step-by-step guide per module (on
 - Per-size Rate / MRP, up to 4 photos and up to 6 colour squares live in `catalog/designs.json` (`rates`, `mrp`, `photos`, `swatches`).
 - Busy Import accepts an optional Size column.
 - Back button on every inner page + browser/phone Back.
+
+## Busy Stock & Sales (menu `trading`)
+- Upload Busy BCN-wise Stock Status and Sales Analysis xlsx files (multi-file). Shop/date are read from the report header.
+- Stock upload = replace snapshot per shop; Sales upload = replace by date range, so re-uploads never double count. Total-row checks and future-date checks block bad data.
+- Current stock = latest snapshot minus sales dated after it. Busy "Sales Price" is used as Cost.
+- Data lives in Storage JSON (`catalog/trade/*`), no DB schema change. ~1 MB JSON per shop.
+- Upload calendar + Dashboard alert for missing dates; Stock and Sales reports per shop.
+- Production WIP has a size-wise Stage Report; grant `trading` menu to Office users in Security.
