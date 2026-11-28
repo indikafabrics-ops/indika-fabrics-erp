@@ -1,0 +1,90 @@
+:root {
+  color-scheme: light;
+  font-family: 'Segoe UI', Tahoma, 'Noto Sans Tamil', 'Latha', sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  color: #0f172a;
+  background: #f1f5f9;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: #f1f5f9;
+  color: #0f172a;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  text-align: left;
+}
+
+h1, h2, h3, h4, p {
+  margin: 0;
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+  color: #0f172a;
+}
+
+input,
+select {
+  background: #fff;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed !important;
+}
+
+table th,
+table td {
+  text-align: left;
+}
+
+code {
+  font-family: ui-monospace, Consolas, monospace;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* phone-friendly: bigger touch targets, no iOS zoom on focus */
+@media (max-width: 700px) {
+  input, select, textarea { font-size: 16px !important; min-height: 42px; }
+  button { min-height: 40px; }
+  .share-bar { width: 100%; }
+  .share-bar button { flex: 1 1 45%; }
+}
